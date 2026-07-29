@@ -1,0 +1,44 @@
+rules:
+  - id: no-prisma-employee-outside-hr
+    languages: [typescript]
+    severity: ERROR
+    message: >
+      School/Therapy must not query prisma.employee*. Use HrEmployeeReadService only
+      (Phase 1 boundary rule).
+    patterns:
+      - pattern-either:
+          - pattern: prisma.employee.$METHOD(...)
+          - pattern: this.prisma.employee.$METHOD(...)
+          - pattern: $P.employee.$METHOD(...)
+    paths:
+      include:
+        - src/modules/school/**
+        - src/modules/therapy/**
+      exclude:
+        - src/modules/hr/**
+
+  - id: no-direct-student-status-write
+    languages: [typescript]
+    severity: ERROR
+    message: >
+      Only StudentStatusService may update students.status. Route all transitions
+      through StudentStatusService.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              prisma.student.update({
+                ...,
+                data: { ..., status: $S, ... },
+                ...
+              })
+          - pattern: |
+              this.prisma.student.update({
+                ...,
+                data: { ..., status: $S, ... },
+                ...
+              })
+    paths:
+      include:
+        - src/modules/school/**
+      exclude:
+        - src/modules/school/services/student-status.service.ts

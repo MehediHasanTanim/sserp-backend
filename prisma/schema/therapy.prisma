@@ -1,0 +1,544 @@
+// Phase 3: Therapy Module Schema
+
+model Therapist {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId           String                @unique @db.Uuid
+  licenseNumber        String?               @map("license_number")
+  availabilityNotes    String?               @map("availability_notes")
+  contractEndDate      DateTime?             @map("contract_end_date") @db.Date
+  supportsSupervision  Boolean               @default(false) @map("supports_supervision")
+  supervisorTherapistId String?              @map("supervisor_therapist_id") @db.Uuid
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  deletedAt            DateTime?             @map("deleted_at")
+
+  supervisor           Therapist?            @relation("TherapistSupervisor", fields: [supervisorTherapistId], references: [id])
+  supervisees          Therapist[]           @relation("TherapistSupervisor")
+  specializations      TherapistSpecialization[]
+  licenses             TherapistLicense[]
+  availability         TherapistAvailability[]
+  sessions             TherapySession[]
+  recurrences          TherapyRecurrence[]
+  treatmentPlans       TreatmentPlan[]
+  waitingList          TherapyWaitingList[]  @relation("PreferredTherapist")
+
+  @@map("therapists")
+}
+
+model TherapistSpecialization {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  therapistId   String        @map("therapist_id") @db.Uuid
+  therapyType   TherapyType   @map("therapy_type")
+  supportsGroup Boolean       @map("supports_group")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  therapist     Therapist     @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@unique([therapistId, therapyType])
+  @@map("therapist_specializations")
+}
+
+model TherapistLicense {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  therapistId      String          @map("therapist_id") @db.Uuid
+  licenseType      String          @map("license_type")
+  licenseNumber    String          @map("license_number")
+  issuingAuthority String          @map("issuing_authority")
+  issuedDate       DateTime        @map("issued_date") @db.Date
+  expiryDate       DateTime?       @map("expiry_date") @db.Date
+  attachmentId     String?         @map("attachment_id") @db.Uuid
+  status           LicenseStatus   @default(valid)
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  therapist        Therapist       @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@map("therapist_licenses")
+}
+
+model TherapistAvailability {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  therapistId   String    @map("therapist_id") @db.Uuid
+  dayOfWeek     Int       @map("day_of_week")
+  startTime     DateTime  @map("start_time") @db.Time
+  endTime       DateTime  @map("end_time") @db.Time
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+
+  therapist     Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@map("therapist_availability")
+}
+
+model Patient {
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientCode            String                @unique @map("patient_code")
+  studentId              String?               @map("student_id") @db.Uuid
+  fullName               String?               @map("full_name")
+  dateOfBirth            DateTime?             @map("date_of_birth") @db.Date
+  gender                 String?
+  guardianName           String?               @map("guardian_name")
+  guardianRelation       String?               @map("guardian_relation")
+  guardianPhone          String?               @map("guardian_phone")
+  guardianEmail          String?               @map("guardian_email")
+  emergencyContactName   String?               @map("emergency_contact_name")
+  emergencyContactPhone  String?               @map("emergency_contact_phone")
+  photoAttachmentId      String?               @map("photo_attachment_id") @db.Uuid
+  insuranceProvider      String?               @map("insurance_provider")
+  insurancePolicyNumber  String?               @map("insurance_policy_number")
+  panelDetails           Json?                 @map("panel_details") @db.Json
+  status                 PatientStatus         @default(active)
+  referralSourceOnCreate String?               @map("referral_source_on_create")
+  dischargeDate          DateTime?             @map("discharge_date") @db.Date
+  dischargeReason        String?               @map("discharge_reason")
+  createdBy              String                @map("created_by") @db.Uuid
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
+  deletedAt              DateTime?             @map("deleted_at")
+
+  medicalHistory         PatientMedicalHistory?
+  consents               PatientConsent[]
+  referrals              Referral[]
+  sessions               TherapySession[]
+  groupMemberships       GroupMembership[]
+  treatmentPlans         TreatmentPlan[]
+  invoices               TherapyInvoice[]
+  payments               TherapyPayment[]
+  refunds                TherapyRefund[]
+  discounts              TherapyDiscount[]
+  waitingList            TherapyWaitingList[]
+
+  @@map("patients")
+}
+
+model PatientMedicalHistory {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId           String    @unique @map("patient_id") @db.Uuid
+  existingConditions  Json?     @map("existing_conditions") @db.Json
+  medications         Json?     @db.Json
+  allergies           Json?     @db.Json
+  pastTherapyHistory  String?   @map("past_therapy_history")
+  updatedBy           String    @map("updated_by") @db.Uuid
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  patient             Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_medical_history")
+}
+
+model PatientConsent {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId    String       @map("patient_id") @db.Uuid
+  consentType  ConsentType  @map("consent_type")
+  attachmentId String?      @map("attachment_id") @db.Uuid
+  signedBy     String       @map("signed_by") @db.Uuid
+  signedDate   DateTime     @map("signed_date") @db.Date
+  expiryDate   DateTime?    @map("expiry_date") @db.Date
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_consents")
+}
+
+model Referral {
+  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId              String         @map("patient_id") @db.Uuid
+  referralSource         ReferralSource @map("referral_source")
+  referrerName           String?        @map("referrer_name")
+  referrerContact        String?        @map("referrer_contact")
+  referralDate           DateTime       @map("referral_date") @db.Date
+  referredForTherapyTypes TherapyType[] @map("referred_for_therapy_types")
+  parentReferralId       String?        @map("parent_referral_id") @db.Uuid
+  attachmentId           String?        @map("attachment_id") @db.Uuid
+  notes                  String?
+  createdAt              DateTime       @default(now()) @map("created_at")
+
+  patient                Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  parentReferral         Referral?      @relation("ReferralChain", fields: [parentReferralId], references: [id])
+  childReferrals         Referral[]     @relation("ReferralChain")
+
+  @@map("referrals")
+}
+
+model TherapyGroup {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  therapyType           TherapyType         @map("therapy_type")
+  therapistId           String              @map("therapist_id") @db.Uuid
+  description           String?
+  maxCapacity           Int                 @map("max_capacity")
+  defaultDurationMinutes Int               @map("default_duration_minutes") @default(60)
+  status                TherapyGroupStatus  @default(active)
+  closedAt              DateTime?           @map("closed_at")
+  closeReason           String?             @map("close_reason")
+  createdBy             String              @map("created_by") @db.Uuid
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+
+  memberships           GroupMembership[]
+  sessions              TherapySession[]
+  recurrences           TherapyRecurrence[]
+  history               GroupHistory[]
+  feeStructures         TherapyFeeStructure[]
+  invoices              TherapyInvoice[]
+  discounts             TherapyDiscount[]
+  waitingList           TherapyWaitingList[]
+
+  @@map("therapy_groups")
+}
+
+model GroupMembership {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  groupId          String                @map("group_id") @db.Uuid
+  patientId        String                @map("patient_id") @db.Uuid
+  enrollmentDate   DateTime              @map("enrollment_date") @db.Date
+  exitDate         DateTime?             @map("exit_date") @db.Date
+  exitReason       String?               @map("exit_reason")
+  state            GroupMembershipState  @default(active)
+  waitlistPosition Int?                  @map("waitlist_position")
+  enrolledBy       String                @map("enrolled_by") @db.Uuid
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  group            TherapyGroup          @relation(fields: [groupId], references: [id])
+  patient          Patient               @relation(fields: [patientId], references: [id])
+
+  @@map("group_memberships")
+}
+
+model GroupHistory {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  groupId       String           @map("group_id") @db.Uuid
+  changeType    GroupChangeType  @map("change_type")
+  detail        Json             @db.Json
+  effectiveDate DateTime         @map("effective_date") @db.Date
+  changedBy     String           @map("changed_by") @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  group         TherapyGroup     @relation(fields: [groupId], references: [id])
+
+  @@map("group_history")
+}
+
+model TherapyRecurrence {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionMode         SessionMode         @map("session_mode")
+  therapistId         String              @map("therapist_id") @db.Uuid
+  patientId           String?             @map("patient_id") @db.Uuid
+  groupId             String?             @map("group_id") @db.Uuid
+  therapyType         TherapyType         @map("therapy_type")
+  recurrencePattern   RecurrencePattern   @map("recurrence_pattern")
+  dayOfWeek           Int?                @map("day_of_week")
+  dayOfMonth          Int?                @map("day_of_month")
+  startTime           DateTime            @map("start_time") @db.Time
+  durationMinutes     Int                 @map("duration_minutes")
+  room                String?
+  startDate           DateTime            @map("start_date") @db.Date
+  endDate             DateTime?           @map("end_date") @db.Date
+  status              RecurrenceStatus    @default(active)
+  generatedUntil      DateTime?           @map("generated_until") @db.Date
+  parentRecurrenceId  String?             @map("parent_recurrence_id") @db.Uuid
+  createdBy           String              @map("created_by") @db.Uuid
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  therapist           Therapist           @relation(fields: [therapistId], references: [id])
+  group               TherapyGroup?       @relation(fields: [groupId], references: [id])
+  parentRecurrence    TherapyRecurrence?  @relation("RecurrenceSplit", fields: [parentRecurrenceId], references: [id])
+  childRecurrences    TherapyRecurrence[] @relation("RecurrenceSplit")
+  sessions            TherapySession[]
+
+  @@map("therapy_recurrences")
+}
+
+model TherapySession {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionMode               SessionMode     @map("session_mode")
+  therapyType               TherapyType     @map("therapy_type")
+  therapistId               String          @map("therapist_id") @db.Uuid
+  patientId                 String?         @map("patient_id") @db.Uuid
+  groupId                   String?         @map("group_id") @db.Uuid
+  recurrenceId              String?         @map("recurrence_id") @db.Uuid
+  recurrenceOccurrenceIndex Int?            @map("recurrence_occurrence_index")
+  isSeriesException         Boolean         @default(false) @map("is_series_exception")
+  scheduledStart            DateTime        @map("scheduled_start") @db.Timestamptz
+  scheduledEnd              DateTime        @map("scheduled_end") @db.Timestamptz
+  durationMinutesPlanned    Int             @map("duration_minutes_planned")
+  durationMinutesActual     Int?            @map("duration_minutes_actual")
+  room                      String?
+  status                    SessionStatus   @default(scheduled)
+  notesInstruction          String?         @map("notes_instruction")
+  cancellationReason        String?         @map("cancellation_reason")
+  cancelledBy               String?         @map("cancelled_by") @db.Uuid
+  cancelledAt               DateTime?       @map("cancelled_at")
+  noShowRecordedBy          String?         @map("no_show_recorded_by") @db.Uuid
+  assessmentPatientName     String?         @map("assessment_patient_name")
+  createdFrom               SessionCreatedFrom @default(main) @map("created_from")
+  createdBy                 String          @map("created_by") @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  therapist                 Therapist       @relation(fields: [therapistId], references: [id])
+  patient                   Patient?        @relation(fields: [patientId], references: [id])
+  group                     TherapyGroup?   @relation(fields: [groupId], references: [id])
+  recurrence                TherapyRecurrence? @relation(fields: [recurrenceId], references: [id])
+  attendances               GroupSessionAttendance[]
+  notes                     SessionNote[]
+  attachments               SessionAttachment[]
+  goalProgress              TreatmentGoalProgress[]
+  invoiceLines              TherapyInvoiceLine[]
+
+  @@map("therapy_sessions")
+}
+
+model GroupSessionAttendance {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId       String          @map("session_id") @db.Uuid
+  patientId       String          @map("patient_id") @db.Uuid
+  status          GroupAttendanceStatus @default(present)
+  arrivalTime     DateTime?       @map("arrival_time") @db.Timestamptz
+  individualNotes String?         @map("individual_notes")
+  markedBy        String          @map("marked_by") @db.Uuid
+  markedAt        DateTime        @default(now()) @map("marked_at")
+
+  session         TherapySession  @relation(fields: [sessionId], references: [id])
+
+  @@unique([sessionId, patientId])
+  @@map("group_session_attendances")
+}
+
+model SessionNote {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId              String          @map("session_id") @db.Uuid
+  patientId              String          @map("patient_id") @db.Uuid
+  narrative              String?
+  observations           String?
+  interventionsUsed      Json?           @map("interventions_used") @db.Json
+  homeworkAssigned       String?         @map("homework_assigned")
+  authoredBy             String          @map("authored_by") @db.Uuid
+  authoredAt             DateTime        @default(now()) @map("authored_at")
+  supervisorReviewedBy   String?         @map("supervisor_reviewed_by") @db.Uuid
+  supervisorReviewedAt   DateTime?       @map("supervisor_reviewed_at")
+  supervisorComment      String?         @map("supervisor_comment")
+  status                 SessionNoteStatus @default(draft)
+
+  session                TherapySession  @relation(fields: [sessionId], references: [id])
+
+  @@unique([sessionId, patientId])
+  @@map("session_notes")
+}
+
+model SessionAttachment {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId    String         @map("session_id") @db.Uuid
+  patientId    String?        @map("patient_id") @db.Uuid
+  attachmentId String         @map("attachment_id") @db.Uuid
+  caption      String?
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  session      TherapySession @relation(fields: [sessionId], references: [id])
+
+  @@map("session_attachments")
+}
+
+model TherapyWaitingList {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId           String            @map("patient_id") @db.Uuid
+  therapyType         TherapyType       @map("therapy_type")
+  preferredTherapistId String?          @map("preferred_therapist_id") @db.Uuid
+  preferredDays       Int[]             @map("preferred_days")
+  preferredTimeFrom   DateTime?         @map("preferred_time_from") @db.Time
+  preferredTimeTo     DateTime?         @map("preferred_time_to") @db.Time
+  groupId             String?           @map("group_id") @db.Uuid
+  priority            Int               @default(0)
+  requestedDate       DateTime          @map("requested_date") @db.Date
+  status              WaitingListStatus @default(waiting)
+  offeredAt           DateTime?         @map("offered_at")
+  offerExpiresAt      DateTime?         @map("offer_expires_at")
+  notes               String?
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  patient             Patient           @relation(fields: [patientId], references: [id])
+  preferredTherapist  Therapist?        @relation("PreferredTherapist", fields: [preferredTherapistId], references: [id])
+  group               TherapyGroup?     @relation(fields: [groupId], references: [id])
+
+  @@map("therapy_waiting_list")
+}
+
+model TreatmentPlan {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId             String              @map("patient_id") @db.Uuid
+  therapyType           TherapyType         @map("therapy_type")
+  version               Int                 @default(1)
+  startDate             DateTime            @map("start_date") @db.Date
+  reviewDate            DateTime?           @map("review_date") @db.Date
+  status                TreatmentPlanStatus @default(draft)
+  previousVersionId     String?             @map("previous_version_id") @db.Uuid
+  createdByTherapistId  String              @map("created_by_therapist_id") @db.Uuid
+  sharedWithGuardianAt  DateTime?           @map("shared_with_guardian_at")
+  documentAttachmentId  String?             @map("document_attachment_id") @db.Uuid
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+
+  patient               Patient             @relation(fields: [patientId], references: [id])
+  therapist             Therapist           @relation(fields: [createdByTherapistId], references: [id])
+  previousVersion       TreatmentPlan?      @relation("PlanVersions", fields: [previousVersionId], references: [id])
+  newerVersions         TreatmentPlan[]     @relation("PlanVersions")
+  goals                 TreatmentGoal[]
+
+  @@map("treatment_plans")
+}
+
+model TreatmentGoal {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  treatmentPlanId     String              @map("treatment_plan_id") @db.Uuid
+  goalType            TreatmentGoalType   @map("goal_type")
+  description         String
+  targetBehavior      String?             @map("target_behavior")
+  baselineMeasurement String?             @map("baseline_measurement")
+  targetMeasurement   String?             @map("target_measurement")
+  measurementUnit     String?             @map("measurement_unit")
+  targetDate          DateTime?           @map("target_date") @db.Date
+  status              IepGoalStatus       @default(not_started)
+  sequence            Int                 @default(0)
+  createdAt           DateTime            @default(now()) @map("created_at")
+
+  plan                TreatmentPlan       @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+  progress            TreatmentGoalProgress[]
+
+  @@map("treatment_goals")
+}
+
+model TreatmentGoalProgress {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  treatmentGoalId   String          @map("treatment_goal_id") @db.Uuid
+  sessionId         String          @map("session_id") @db.Uuid
+  measuredValue     String?         @map("measured_value")
+  progressPercentage Int?           @map("progress_percentage")
+  narrative         String?
+  recordedBy        String          @map("recorded_by") @db.Uuid
+  recordedAt        DateTime        @default(now()) @map("recorded_at")
+
+  goal              TreatmentGoal   @relation(fields: [treatmentGoalId], references: [id], onDelete: Cascade)
+  session           TherapySession  @relation(fields: [sessionId], references: [id])
+
+  @@map("treatment_goal_progress")
+}
+
+model TherapyFeeStructure {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  therapyType     TherapyType @map("therapy_type")
+  sessionMode     SessionMode @map("session_mode")
+  durationMinutes Int         @map("duration_minutes")
+  groupId         String?     @map("group_id") @db.Uuid
+  amount          Int
+  effectiveFrom   DateTime    @map("effective_from") @db.Date
+  effectiveTo     DateTime?   @map("effective_to") @db.Date
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  group           TherapyGroup? @relation(fields: [groupId], references: [id])
+
+  @@map("therapy_fee_structures")
+}
+
+model TherapyInvoice {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceNumber     String              @unique @map("invoice_number")
+  patientId         String              @map("patient_id") @db.Uuid
+  sessionMode       SessionMode         @map("session_mode")
+  groupId           String?             @map("group_id") @db.Uuid
+  billingType       TherapyBillingType  @map("billing_type")
+  periodMonth       Int?                @map("period_month")
+  periodYear        Int?                @map("period_year")
+  grossAmount       Int                 @map("gross_amount")
+  discountAmount    Int                 @default(0) @map("discount_amount")
+  netAmount         Int                 @map("net_amount")
+  paidAmount        Int                 @default(0) @map("paid_amount")
+  outstandingAmount Int                 @map("outstanding_amount")
+  status            TherapyInvoiceStatus @default(draft)
+  cancelledReason   String?             @map("cancelled_reason")
+  createdBy         String              @map("created_by") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  patient           Patient             @relation(fields: [patientId], references: [id])
+  group             TherapyGroup?       @relation(fields: [groupId], references: [id])
+  lines             TherapyInvoiceLine[]
+  payments          TherapyPayment[]
+  discounts         TherapyDiscount[]
+
+  @@map("therapy_invoices")
+}
+
+model TherapyInvoiceLine {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId      String         @map("invoice_id") @db.Uuid
+  sessionId      String?        @map("session_id") @db.Uuid
+  description    String
+  amount         Int
+  discountAmount Int            @default(0) @map("discount_amount")
+  netAmount      Int            @map("net_amount")
+
+  invoice        TherapyInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  session        TherapySession? @relation(fields: [sessionId], references: [id])
+
+  @@map("therapy_invoice_lines")
+}
+
+model TherapyPayment {
+  id          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiptNumber String              @unique @map("receipt_number")
+  invoiceId   String                @map("invoice_id") @db.Uuid
+  patientId   String                @map("patient_id") @db.Uuid
+  amount      Int
+  method      PaymentMethod
+  reference   String?
+  paymentDate DateTime              @map("payment_date") @db.Date
+  receivedBy  String                @map("received_by") @db.Uuid
+  status      TherapyPaymentStatus  @default(recorded)
+  createdAt   DateTime              @default(now()) @map("created_at")
+
+  invoice     TherapyInvoice        @relation(fields: [invoiceId], references: [id])
+  patient     Patient               @relation(fields: [patientId], references: [id])
+  refund      TherapyRefund?
+
+  @@map("therapy_payments")
+}
+
+model TherapyRefund {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId   String        @map("patient_id") @db.Uuid
+  paymentId   String        @unique @map("payment_id") @db.Uuid
+  amount      Int
+  reason      String
+  refundDate  DateTime      @map("refund_date") @db.Date
+  approvedBy  String        @map("approved_by") @db.Uuid
+  method      PaymentMethod
+  status      TherapyPaymentStatus @default(recorded)
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  patient     Patient       @relation(fields: [patientId], references: [id])
+  payment     TherapyPayment @relation(fields: [paymentId], references: [id])
+
+  @@map("therapy_refunds")
+}
+
+model TherapyDiscount {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId   String        @map("patient_id") @db.Uuid
+  invoiceId   String?       @map("invoice_id") @db.Uuid
+  groupId     String?       @map("group_id") @db.Uuid
+  discountType DiscountType @map("discount_type")
+  value       Int
+  reason      String
+  approvedBy  String        @map("approved_by") @db.Uuid
+  approvedAt  DateTime      @map("approved_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  patient     Patient       @relation(fields: [patientId], references: [id])
+  invoice     TherapyInvoice? @relation(fields: [invoiceId], references: [id])
+  group       TherapyGroup?  @relation(fields: [groupId], references: [id])
+
+  @@map("therapy_discounts")
+}

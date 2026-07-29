@@ -1,0 +1,517 @@
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgcrypto, citext]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["prismaSchemaFolder", "postgresqlExtensions"]
+  binaryTargets   = ["native", "linux-musl-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+enum LoginOutcome {
+  success
+  bad_credentials
+  locked
+  inactive
+}
+
+enum AttachmentStatus {
+  pending
+  confirmed
+  orphaned
+}
+
+enum LedgerPostingStatus {
+  pending
+  posted
+  failed
+}
+
+enum NumberingResetPeriod {
+  never
+  yearly
+  monthly
+}
+
+enum PermissionModule {
+  school
+  therapy
+  hr
+  accounts
+  finance
+  inventory
+  procurement
+  reports
+  admin
+  portal
+}
+
+enum PermissionAction {
+  read
+  create
+  update
+  delete
+  approve
+  export
+}
+
+enum HrDepartment {
+  school
+  therapy
+  administration
+  support
+}
+
+enum EmploymentType {
+  permanent
+  contractual
+  part_time
+}
+
+enum EmployeeStatus {
+  active
+  on_probation
+  on_notice
+  resigned
+  terminated
+  retired
+}
+
+enum EmployeeDocumentType {
+  nid
+  qualification
+  police_clearance
+  offer_letter
+  other
+}
+
+enum EmployeeChangeType {
+  transfer
+  promotion
+  designation_change
+  salary_change
+  status_change
+}
+
+enum ExitType {
+  resignation
+  termination
+  retirement
+}
+
+enum ExitStatus {
+  in_progress
+  completed
+}
+
+enum HrAttendanceStatus {
+  present
+  absent
+  late
+  half_day
+  on_duty
+  holiday
+  leave
+}
+
+enum AttendanceSource {
+  manual
+  biometric
+}
+
+enum LeaveRequestStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+enum ApprovalDecision {
+  pending
+  approved
+  rejected
+}
+
+enum HolidayType {
+  public
+  school
+  optional
+}
+
+enum AcademicYearStatus {
+  planning
+  active
+  closed
+}
+
+enum StudentStatus {
+  pending_admission_fee
+  active
+  on_leave
+  inactive
+  graduated
+  transferred
+  withdrawn
+}
+
+enum StudentDocumentType {
+  birth_certificate
+  disability_certificate
+  doctor_report
+  previous_iep
+  photo
+  other
+}
+
+enum EnrollmentStatus {
+  enrolled
+  carried_forward
+  completed
+  withdrawn
+}
+
+enum AdmissionFeeStatus {
+  pending
+  paid
+  waived
+}
+
+enum PaymentMethod {
+  cash
+  bank_transfer
+  cheque
+  online
+}
+
+enum TeacherStatus {
+  active
+  on_leave
+  resigned
+  transferred
+}
+
+enum SubstituteTrigger {
+  absence
+  leave
+}
+
+enum SubstituteStatus {
+  pending
+  assigned
+  auto_reverted
+  cancelled
+}
+
+enum StudentAttendanceStatus {
+  present
+  absent
+  late
+  half_day
+  excused_leave
+  medical
+}
+
+enum AmendmentStatus {
+  pending
+  approved
+  rejected
+}
+
+enum IepStatus {
+  draft
+  active
+  archived
+}
+
+enum IepGoalStatus {
+  not_started
+  in_progress
+  achieved
+  discontinued
+}
+
+enum IepReviewType {
+  quarterly
+  annual
+  ad_hoc
+}
+
+enum IepReviewStatus {
+  scheduled
+  completed
+  missed
+}
+
+enum ProgressReportType {
+  monthly_progress
+  quarterly_iep
+}
+
+enum ProgressReportStatus {
+  draft
+  submitted
+  approved
+  rejected
+  published
+}
+
+enum FeeHeadType {
+  tuition
+  transport
+  material
+  other
+}
+
+enum FeeFrequency {
+  monthly
+  term
+  annual
+  one_time
+}
+
+enum DiscountType {
+  percentage
+  fixed
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum FeeInvoiceType {
+  monthly
+  activity
+  adhoc
+}
+
+enum FeeInvoiceStatus {
+  draft
+  issued
+  partially_paid
+  paid
+  waived
+  cancelled
+}
+
+enum FeePaymentStatus {
+  recorded
+  reversed
+}
+
+enum MedicalIncidentType {
+  injury
+  seizure
+  health_episode
+  other
+}
+
+enum IncidentSeverity {
+  low
+  medium
+  high
+}
+
+enum BehaviorSupportPlanStatus {
+  active
+  archived
+}
+
+enum ActivityStatus {
+  upcoming
+  ongoing
+  completed
+  cancelled
+}
+
+enum ActivityConsentStatus {
+  pending
+  confirmed
+  declined
+}
+
+enum ActivityConsentChannel {
+  portal
+  coordinator_manual
+}
+
+enum ActivityEnrollmentState {
+  confirmed
+  waitlisted
+  declined
+  withdrawn
+}
+
+enum ActivityFeeStatus {
+  pending
+  paid
+  waived
+}
+
+enum ActivityAttendanceStatus {
+  present
+  absent
+  withdrew_last_minute
+}
+
+enum StudentLeaveType {
+  medical
+  family
+  travel
+  other
+}
+
+enum PortalThreadStatus {
+  open
+  closed
+}
+
+enum PortalSenderType {
+  guardian
+  staff
+}
+
+enum ConsentType {
+  therapy
+  media
+  data_sharing
+}
+
+enum TherapyType {
+  ot
+  speech
+  aba
+  music
+  dance
+  assessment
+  physiotherapy
+  psychology
+  other
+}
+
+enum SessionMode {
+  individual
+  group
+}
+
+enum SessionStatus {
+  scheduled
+  in_progress
+  completed
+  cancelled
+  no_show
+}
+
+enum SessionCreatedFrom {
+  main
+  patient_profile
+  therapist_profile
+  group
+  recurrence_job
+}
+
+enum SessionNoteStatus {
+  draft
+  final
+  co_signed
+}
+
+enum PatientStatus {
+  active
+  discharged
+  on_hold
+  waitlisted
+}
+
+enum LicenseStatus {
+  valid
+  expiring
+  expired
+}
+
+enum ReferralSource {
+  self
+  doctor
+  school
+  other
+}
+
+enum TherapyGroupStatus {
+  active
+  closed
+}
+
+enum GroupMembershipState {
+  active
+  waitlisted
+  exited
+}
+
+enum GroupChangeType {
+  membership_added
+  membership_removed
+  therapist_changed
+  schedule_changed
+  status_changed
+}
+
+enum RecurrencePattern {
+  daily
+  weekly
+  biweekly
+  monthly
+}
+
+enum RecurrenceStatus {
+  active
+  ended
+  cancelled
+}
+
+enum GroupAttendanceStatus {
+  present
+  absent
+  late
+  excused
+}
+
+enum WaitingListStatus {
+  waiting
+  offered
+  scheduled
+  cancelled
+}
+
+enum TreatmentPlanStatus {
+  draft
+  active
+  under_review
+  archived
+}
+
+enum TreatmentGoalType {
+  short_term
+  long_term
+}
+
+enum TherapyBillingType {
+  per_session
+  monthly_consolidated
+}
+
+enum TherapyInvoiceStatus {
+  draft
+  issued
+  partially_paid
+  paid
+  waived
+  cancelled
+}
+
+enum TherapyPaymentStatus {
+  recorded
+  reversed
+}

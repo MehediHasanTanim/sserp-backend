@@ -1,0 +1,162 @@
+model User {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username             String    @unique @db.Citext
+  email                String    @unique @db.Citext
+  passwordHash         String    @map("password_hash")
+  employeeId           String?   @unique @map("employee_id") @db.Uuid
+  guardianId           String?   @map("guardian_id") @db.Uuid
+  isActive             Boolean   @default(true) @map("is_active")
+  lastLoginAt          DateTime? @map("last_login_at")
+  passwordChangedAt     DateTime  @default(now()) @map("password_changed_at")
+  mustChangePassword   Boolean   @default(false) @map("must_change_password")
+  failedLoginAttempts  Int       @default(0) @map("failed_login_attempts")
+  lockedUntil          DateTime? @map("locked_until")
+  twoFactorSecret      String?   @map("two_factor_secret")
+  twoFactorEnabled     Boolean   @default(false) @map("two_factor_enabled")
+  passwordHistory      String[]  @default([]) @map("password_history")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  createdBy            String?   @map("created_by") @db.Uuid
+  updatedBy            String?   @map("updated_by") @db.Uuid
+  deletedAt            DateTime? @map("deleted_at")
+
+  employee         Employee?        @relation(fields: [employeeId], references: [id])
+  guardianProfile  GuardianProfile? @relation(fields: [guardianId], references: [id])
+  roles            UserRole[]
+  refreshTokens    RefreshToken[]
+  loginActivities  LoginActivity[]
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+  attachments      Attachment[]     @relation("UploadedBy")
+  idempotencyKeys  IdempotencyKey[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(true) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId String           @map("role_id") @db.Uuid
+  module PermissionModule
+  action PermissionAction
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, module, action])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  tokenHash    String    @map("token_hash")
+  familyId     String    @map("family_id") @db.Uuid
+  issuedAt     DateTime  @default(now()) @map("issued_at")
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  replacedById String?   @map("replaced_by_id") @db.Uuid
+  userAgent    String?   @map("user_agent")
+  ipAddress    String?   @map("ip_address")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([familyId])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model LoginActivity {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String?      @map("user_id") @db.Uuid
+  usernameAttempted String       @map("username_attempted")
+  outcome           LoginOutcome
+  ipAddress         String?      @map("ip_address") @db.Inet
+  userAgent         String?      @map("user_agent")
+  createdAt         DateTime     @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("login_activity")
+}
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  action     String
+  module     String
+  entityName String   @map("entity_name")
+  entityId   String?  @map("entity_id")
+  beforeValue Json?   @map("before_value")
+  afterValue  Json?   @map("after_value")
+  ipAddress  String?  @map("ip_address") @db.Inet
+  requestId  String?  @map("request_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityName, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  type              String
+  title             String
+  body              String
+  entityType        String?   @map("entity_type")
+  entityId          String?   @map("entity_id")
+  channelsRequested String[]  @map("channels_requested")
+  readAt            DateTime? @map("read_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model IdempotencyKey {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key            String
+  userId         String   @map("user_id") @db.Uuid
+  endpoint       String
+  requestHash    String   @map("request_hash")
+  responseStatus Int      @map("response_status")
+  responseBody   Json     @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at")
+  expiresAt      DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([key, endpoint])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}

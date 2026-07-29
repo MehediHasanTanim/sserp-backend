@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Progress Report</title>
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #1a1a1a; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    .meta { color: #555; margin-bottom: 12px; }
+    section { margin-top: 16px; }
+    h2 { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Progress Report</h1>
+  <div class="meta">
+    Student: {{student.fullName}} ({{student.studentCode}})<br />
+    Type: {{report.reportType}} &mdash; Period: {{report.periodStart}} to {{report.periodEnd}}<br />
+    Status: {{report.status}} &mdash; Published: {{report.publishedAt}}
+  </div>
+
+  <section>
+    <h2>Narrative</h2>
+    <pre>{{json report.narrativeSections}}</pre>
+  </section>
+
+  <section>
+    <h2>Domain ratings</h2>
+    <pre>{{json report.domainRatings}}</pre>
+  </section>
+</body>
+</html>

@@ -1,0 +1,114 @@
+export enum ErrorCode {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  UNAUTHENTICATED = 'UNAUTHENTICATED',
+  FORBIDDEN = 'FORBIDDEN',
+  NOT_FOUND = 'NOT_FOUND',
+  CONFLICT = 'CONFLICT',
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
+  PASSWORD_CHANGE_REQUIRED = 'PASSWORD_CHANGE_REQUIRED',
+  WEAK_PASSWORD = 'WEAK_PASSWORD',
+  FILE_TOO_LARGE = 'FILE_TOO_LARGE',
+  UNSUPPORTED_MEDIA_TYPE = 'UNSUPPORTED_MEDIA_TYPE',
+  UNPROCESSABLE = 'UNPROCESSABLE',
+  RATE_LIMITED = 'RATE_LIMITED',
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
+  ADMISSION_FEE_PENDING = 'ADMISSION_FEE_PENDING',
+  PARTIAL_PAYMENT_NOT_ALLOWED = 'PARTIAL_PAYMENT_NOT_ALLOWED',
+  INVALID_STATUS_TRANSITION = 'INVALID_STATUS_TRANSITION',
+  SHIFT_CAP_EXCEEDED = 'SHIFT_CAP_EXCEEDED',
+  TEACHER_NOT_IN_SHIFT = 'TEACHER_NOT_IN_SHIFT',
+  SHIFT_MISMATCH = 'SHIFT_MISMATCH',
+  STUDENT_NOT_ACTIVE = 'STUDENT_NOT_ACTIVE',
+  STUDENT_ALREADY_MAPPED = 'STUDENT_ALREADY_MAPPED',
+  MAPPING_EXISTS = 'MAPPING_EXISTS',
+  SUBSTITUTE_UNAVAILABLE = 'SUBSTITUTE_UNAVAILABLE',
+  DATE_IS_HOLIDAY = 'DATE_IS_HOLIDAY',
+  FUTURE_DATE = 'FUTURE_DATE',
+  OUT_OF_ENROLLMENT_RANGE = 'OUT_OF_ENROLLMENT_RANGE',
+  ATTENDANCE_FROZEN = 'ATTENDANCE_FROZEN',
+  INSUFFICIENT_LEAVE_BALANCE = 'INSUFFICIENT_LEAVE_BALANCE',
+  OVERLAPPING_LEAVE = 'OVERLAPPING_LEAVE',
+  MEDICAL_CERTIFICATE_REQUIRED = 'MEDICAL_CERTIFICATE_REQUIRED',
+  ACTIVE_IEP_EXISTS = 'ACTIVE_IEP_EXISTS',
+  IEP_NOT_EDITABLE = 'IEP_NOT_EDITABLE',
+  IEP_INCOMPLETE = 'IEP_INCOMPLETE',
+  INVALID_REPORT_TRANSITION = 'INVALID_REPORT_TRANSITION',
+  REPORT_EXISTS = 'REPORT_EXISTS',
+  NO_TEMPLATE = 'NO_TEMPLATE',
+  GOAL_LINK_REQUIRED = 'GOAL_LINK_REQUIRED',
+  OVERPAYMENT = 'OVERPAYMENT',
+  INVOICE_HAS_PAYMENTS = 'INVOICE_HAS_PAYMENTS',
+  OPTIN_CLOSED = 'OPTIN_CLOSED',
+  BACKDATED_REQUEST = 'BACKDATED_REQUEST',
+  SCHEDULE_CONFLICT = 'SCHEDULE_CONFLICT',
+  THERAPIST_NOT_ACTIVE = 'THERAPIST_NOT_ACTIVE',
+  PATIENT_NOT_ACTIVE = 'PATIENT_NOT_ACTIVE',
+  GROUP_FULL = 'GROUP_FULL',
+  GROUP_CLOSED = 'GROUP_CLOSED',
+  ALREADY_ENROLLED = 'ALREADY_ENROLLED',
+  NOT_ENROLLED = 'NOT_ENROLLED',
+  SESSION_NOT_CANCELLABLE = 'SESSION_NOT_CANCELLABLE',
+  SESSION_ALREADY_COMPLETED = 'SESSION_ALREADY_COMPLETED',
+  ACTIVE_TREATMENT_PLAN_EXISTS = 'ACTIVE_TREATMENT_PLAN_EXISTS',
+  TREATMENT_PLAN_NOT_EDITABLE = 'TREATMENT_PLAN_NOT_EDITABLE',
+  THERAPY_INVOICE_HAS_PAYMENTS = 'THERAPY_INVOICE_HAS_PAYMENTS',
+  SERIES_CAP_EXCEEDED = 'SERIES_CAP_EXCEEDED',
+  RECURRENCE_ENDED = 'RECURRENCE_ENDED',
+  LICENSE_EXPIRED = 'LICENSE_EXPIRED',
+  UNSUPPORTED_THERAPY_TYPE = 'UNSUPPORTED_THERAPY_TYPE',
+}
+
+export class DomainException extends Error {
+  constructor(
+    public readonly code: ErrorCode,
+    public readonly statusCode: number,
+    message: string,
+    public readonly details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = 'DomainException';
+  }
+
+  static invalidCredentials(message = 'Invalid username or password') {
+    return new DomainException(ErrorCode.INVALID_CREDENTIALS, 401, message);
+  }
+
+  static locked(message = 'Account is temporarily locked') {
+    return new DomainException(ErrorCode.ACCOUNT_LOCKED, 423, message);
+  }
+
+  static forbidden(message = 'Forbidden', code = ErrorCode.FORBIDDEN) {
+    return new DomainException(code, 403, message);
+  }
+
+  static notFound(message = 'Not found') {
+    return new DomainException(ErrorCode.NOT_FOUND, 404, message);
+  }
+
+  static conflict(message: string) {
+    return new DomainException(ErrorCode.CONFLICT, 409, message);
+  }
+
+  static validation(message: string, details?: Record<string, unknown>) {
+    return new DomainException(
+      ErrorCode.VALIDATION_ERROR,
+      400,
+      message,
+      details,
+    );
+  }
+
+  static unprocessable(message: string, details?: Record<string, unknown>) {
+    return new DomainException(ErrorCode.UNPROCESSABLE, 422, message, details);
+  }
+
+  static withCode(
+    code: ErrorCode,
+    statusCode: number,
+    message: string,
+    details?: Record<string, unknown>,
+  ) {
+    return new DomainException(code, statusCode, message, details);
+  }
+}

@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.git
+.DS_Store
+.env
+.env.local
+*.log
+reports
+.stryker-tmp
+docs
+openapi
+k6

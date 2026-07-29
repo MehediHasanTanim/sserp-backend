@@ -1,0 +1,82 @@
+model OrganizationSettings {
+  id                        String   @id @db.Uuid
+  name                      String
+  logoObjectKey             String?  @map("logo_object_key")
+  address                   String?
+  phone                     String?
+  email                     String?
+  registrationDetails       Json?    @map("registration_details")
+  currencyCode              String   @default("BDT") @map("currency_code")
+  currencyMinorUnits        Int      @default(2) @map("currency_minor_units")
+  timezone                  String   @default("Asia/Dhaka")
+  sessionIdleTimeoutMinutes Int      @default(30) @map("session_idle_timeout_minutes")
+  dateFormat                String   @default("dd/MM/yyyy") @map("date_format")
+  fiscalYearStartMonth      Int      @default(7) @map("fiscal_year_start_month")
+  /// Weekday numbers (0=Sun … 6=Sat) that are weekly offs. Default Fri–Sat.
+  workingWeek               Json     @default("[5, 6]") @map("working_week")
+  feeDueDayOfMonth          Int      @default(10) @map("fee_due_day_of_month")
+  feeReminderDays           Json     @default("[3, 7, 15, 30]") @map("fee_reminder_days")
+  discountApprovalThresholdPercent Int @default(10) @map("discount_approval_threshold_percent")
+  portalMessageEnabled      Boolean  @default(true) @map("portal_message_enabled")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  @@map("organization_settings")
+}
+
+model NumberingScheme {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entityType      String                @unique @map("entity_type")
+  prefix          String
+  padding         Int                   @default(4)
+  currentSequence Int                   @default(0) @map("current_sequence")
+  resetPeriod     NumberingResetPeriod  @default(never) @map("reset_period")
+  lastResetAt     DateTime?             @map("last_reset_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  @@map("numbering_schemes")
+}
+
+model Attachment {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bucket           String
+  objectKey        String           @unique @map("object_key")
+  originalFilename String           @map("original_filename")
+  mimeType         String           @map("mime_type")
+  sizeBytes        Int              @map("size_bytes")
+  checksumSha256   String?          @map("checksum_sha256")
+  entityType       String?          @map("entity_type")
+  entityId         String?          @map("entity_id")
+  uploadedBy       String           @map("uploaded_by") @db.Uuid
+  status           AttachmentStatus @default(pending)
+  createdAt        DateTime         @default(now()) @map("created_at")
+  deletedAt        DateTime?        @map("deleted_at")
+
+  uploader User @relation("UploadedBy", fields: [uploadedBy], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([status, createdAt])
+  @@map("attachments")
+}
+
+model PendingLedgerPosting {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  referenceType     String              @map("reference_type")
+  referenceId       String              @map("reference_id")
+  amount            Int
+  costCenter        String              @map("cost_center")
+  description       String
+  debitAccountCode  String              @map("debit_account_code")
+  creditAccountCode String              @map("credit_account_code")
+  postingDate       DateTime            @map("posting_date") @db.Date
+  payload           Json?
+  status            LedgerPostingStatus @default(pending)
+  postedJournalId   String?             @map("posted_journal_id") @db.Uuid
+  errorMessage      String?             @map("error_message")
+  createdAt         DateTime            @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("pending_ledger_postings")
+}

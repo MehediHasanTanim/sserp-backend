@@ -1,0 +1,17 @@
+rules:
+  - id: no-unguarded-controller
+    patterns:
+      - pattern: |
+          @Controller(...)
+          class $C {
+            ...
+            async $METHOD(...) { ... }
+          }
+    message: >
+      Controller methods must be protected by JwtAuthGuard (global) and either
+      @Public() or explicit @Roles/@Permissions. Review this handler carefully.
+    languages: [typescript]
+    severity: WARNING
+    paths:
+      include:
+        - src/modules/**/controllers/**

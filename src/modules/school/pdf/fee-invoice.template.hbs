@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Invoice {{invoice.invoiceNumber}}</title>
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #1a1a1a; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; font-size: 11px; }
+    .totals { margin-top: 12px; text-align: right; }
+  </style>
+</head>
+<body>
+  <h1>Invoice {{invoice.invoiceNumber}}</h1>
+  <div>
+    Student: {{student.fullName}} ({{student.studentCode}})<br />
+    Issue date: {{invoice.issueDate}} &mdash; Due date: {{invoice.dueDate}}<br />
+    Status: {{invoice.status}}
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Description</th><th>Amount</th><th>Discount</th><th>Net</th></tr>
+    </thead>
+    <tbody>
+      {{#each invoice.lines}}
+      <tr>
+        <td>{{description}}</td>
+        <td>{{amount}}</td>
+        <td>{{discountAmount}}</td>
+        <td>{{netAmount}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <div class="totals">
+    Gross: {{invoice.grossAmount}}<br />
+    Discount: {{invoice.discountAmount}}<br />
+    Net: {{invoice.netAmount}}<br />
+    Paid: {{invoice.paidAmount}}<br />
+    Outstanding: {{invoice.outstandingAmount}}
+  </div>
+</body>
+</html>
