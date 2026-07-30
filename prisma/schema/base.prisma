@@ -515,3 +515,199 @@ enum TherapyPaymentStatus {
   recorded
   reversed
 }
+
+enum AccountType {
+  asset
+  liability
+  equity
+  revenue
+  expense
+}
+
+enum NormalBalance {
+  debit
+  credit
+}
+
+enum FiscalPeriodStatus {
+  open
+  closed
+  locked
+}
+
+enum JournalEntryType {
+  manual
+  system
+  recurring
+  opening
+  closing
+  reversal
+}
+
+enum JournalEntryStatus {
+  draft
+  submitted
+  posted
+  rejected
+  reversed
+}
+
+enum RecurringFrequency {
+  monthly
+  quarterly
+  annual
+}
+
+enum BankAccountType {
+  current
+  savings
+  petty_cash
+}
+
+enum VoucherType {
+  cash_receipt
+  cash_payment
+  bank_receipt
+  bank_payment
+  journal
+  contra
+}
+
+enum VoucherStatus {
+  draft
+  posted
+  cancelled
+}
+
+enum PartyType {
+  student
+  patient
+  employee
+  vendor
+  shareholder
+  other
+}
+
+enum ChequeDirection {
+  issued
+  received
+}
+
+enum ChequeStatus {
+  pending
+  presented
+  cleared
+  bounced
+  cancelled
+}
+
+enum BankStatementStatus {
+  importing
+  reconciling
+  reconciled
+}
+
+enum BankMatchStatus {
+  unmatched
+  auto_matched
+  manually_matched
+  ignored
+}
+
+enum ReconciliationStatus {
+  in_progress
+  completed
+}
+
+enum ArSourceType {
+  admission_fee
+  tuition_fee
+  activity_fee
+  therapy_individual
+  therapy_group
+}
+
+enum ArLedgerStatus {
+  open
+  partially_settled
+  settled
+  written_off
+}
+
+enum ApSourceType {
+  vendor_invoice
+  payroll
+  gratuity
+  encashment
+  expense_claim
+}
+
+enum ApPartyType {
+  vendor
+  employee
+}
+
+enum CollectionChannel {
+  call
+  sms
+  email
+  meeting
+}
+
+enum NoteType {
+  credit_note
+  write_off
+  debit_note
+}
+
+enum NoteStatus {
+  draft
+  approved
+  posted
+  cancelled
+}
+
+enum TaxType {
+  vat
+  withholding
+  income
+  other
+}
+
+enum TaxDirection {
+  input
+  output
+}
+
+enum BudgetStatus {
+  draft
+  approved
+  revised
+  closed
+}
+
+enum BudgetEnforcementMode {
+  warn
+  block
+}
+
+enum ShareholderType {
+  individual
+  corporate
+}
+
+enum ShareholderStatus {
+  active
+  exited
+}
+
+enum AppropriationStatus {
+  draft
+  approved
+  disbursed
+}
+
+enum DisbursementStatus {
+  pending
+  paid
+}

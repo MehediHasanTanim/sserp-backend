@@ -1,19 +1,22 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Module, forwardRef } from '@nestjs/common';
 import { LedgerPort } from './ledger.port';
-import { OutboxLedgerAdapter } from './outbox-ledger.adapter';
 import { NotificationPort } from './notification.port';
 import { InAppOnlyNotificationAdapter } from './in-app-notification.adapter';
+import { AccountsModule } from '../../modules/accounts/accounts.module';
+import { AccountsLedgerAdapter } from '../../modules/accounts/adapters/accounts-ledger.adapter';
 
 /**
- * Makes the cross-module ports (`LedgerPort`, `NotificationPort`) available
- * to every feature module without each one re-declaring the adapters.
- * Swap the `useClass` bindings here when a real ledger/notification
- * integration replaces the Phase 0 stubs.
+ * Cross-module ports. LedgerPort is bound to AccountsLedgerAdapter (Phase 4 cutover).
+ * Outbox remains for audit/replay of historical pending_ledger_postings.
  */
 @Global()
 @Module({
+  imports: [forwardRef(() => AccountsModule)],
   providers: [
-    { provide: LedgerPort, useClass: OutboxLedgerAdapter },
+    {
+      provide: LedgerPort,
+      useExisting: AccountsLedgerAdapter,
+    },
     { provide: NotificationPort, useClass: InAppOnlyNotificationAdapter },
   ],
   exports: [LedgerPort, NotificationPort],

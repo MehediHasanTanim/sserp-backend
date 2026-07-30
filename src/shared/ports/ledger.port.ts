@@ -1,3 +1,5 @@
+import { TxClient } from '../prisma/transaction.helper';
+
 export interface PostingRequest {
   referenceType: string;
   referenceId: string;
@@ -17,5 +19,5 @@ export interface PostingResult {
 }
 
 export abstract class LedgerPort {
-  abstract post(request: PostingRequest): Promise<PostingResult>;
+  abstract post(request: PostingRequest, tx?: TxClient): Promise<PostingResult>;
 }

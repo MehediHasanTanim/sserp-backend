@@ -8,7 +8,7 @@ export class OutboxLedgerAdapter extends LedgerPort {
     super();
   }
 
-  async post(request: PostingRequest): Promise<PostingResult> {
+  async post(request: PostingRequest, _tx?: unknown): Promise<PostingResult> {
     const row = await this.prisma.pendingLedgerPosting.create({
       data: {
         referenceType: request.referenceType,

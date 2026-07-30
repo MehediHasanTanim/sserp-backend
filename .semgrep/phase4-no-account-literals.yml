@@ -1,0 +1,19 @@
+rules:
+  - id: no-account-code-literals-outside-accounts
+    languages: [typescript]
+    message: >-
+      Account codes must be resolved via posting_rules / AccountsService.
+      Do not hardcode debit/credit account codes outside the accounts module.
+    severity: error
+    patterns:
+      - pattern-either:
+          - pattern: debitAccountCode: "..."
+          - pattern: creditAccountCode: "..."
+      - pattern-not-inside: |
+          class $X { ... }
+    paths:
+      exclude:
+        - src/modules/accounts/**
+        - '**/*.spec.ts'
+        - prisma/**
+        - dist/**

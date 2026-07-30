@@ -18,6 +18,9 @@ model OrganizationSettings {
   feeReminderDays           Json     @default("[3, 7, 15, 30]") @map("fee_reminder_days")
   discountApprovalThresholdPercent Int @default(10) @map("discount_approval_threshold_percent")
   portalMessageEnabled      Boolean  @default(true) @map("portal_message_enabled")
+  dividendWithholdingTaxPercent Int @default(10) @map("dividend_withholding_tax_percent")
+  defaultBudgetEnforcementMode String @default("warn") @map("default_budget_enforcement_mode")
+  bankMatchDateWindowDays   Int      @default(3) @map("bank_match_date_window_days")
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
 

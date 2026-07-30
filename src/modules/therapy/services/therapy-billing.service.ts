@@ -153,7 +153,7 @@ export class TherapyBillingService {
       amount,
       description: `Therapy invoice ${invoiceNumber}`,
       costCenter: 'therapy',
-      debitAccountCode: '1200',
+      debitAccountCode: '1220',
       creditAccountCode: '4100',
       postingDate: new Date(),
       payload: { patientId: session.patientId! },
@@ -287,10 +287,10 @@ export class TherapyBillingService {
       amount: dto.amount,
       description: `Therapy payment receipt ${receiptNumber}`,
       costCenter: 'therapy',
-      debitAccountCode: '1000',
-      creditAccountCode: '1200',
+      debitAccountCode: '1120',
+      creditAccountCode: '1220',
       postingDate: new Date(),
-      payload: { patientId: invoice.patientId },
+      payload: { patientId: invoice.patientId, paymentMethod: dto.method, variant: dto.method },
     });
 
     this.events.emit(EventNames.THERAPY_PAYMENT_RECEIVED, {

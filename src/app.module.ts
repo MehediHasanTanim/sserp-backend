@@ -33,6 +33,8 @@ import { FilesModule } from './modules/files/files.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { HealthModule } from './modules/health/health.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
+import { AccountsModule } from './modules/accounts/accounts.module';
+import { FinanceModule } from './modules/finance/finance.module';
 
 @Module({
   imports: [
@@ -70,6 +72,8 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
     NotificationsModule,
     HealthModule,
     MaintenanceModule,
+    AccountsModule,
+    FinanceModule,
   ],
   providers: [
     TransactionalEventPublisher,

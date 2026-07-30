@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import { seedPhase1 } from './phase1.seed';
 import { seedPhase2 } from './phase2.seed';
 import { seedPhase3 } from './phase3.seed';
+import { seedPhase4 } from './phase4.seed';
 import { seedDemo } from './demo.seed';
 
 const prisma = new PrismaClient();
@@ -413,6 +414,7 @@ async function main() {
   await seedPhase1(prisma);
   await seedPhase2(prisma);
   await seedPhase3(prisma);
+  await seedPhase4(prisma);
 
   if (process.env.SEED_DEMO === 'true') {
     await seedDemo(prisma);

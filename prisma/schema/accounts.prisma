@@ -1,0 +1,501 @@
+// Phase 4: Accounts Module Schema
+
+model ChartOfAccount {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountCode        String        @unique @map("account_code") @db.VarChar(20)
+  accountName        String        @map("account_name") @db.VarChar(200)
+  accountType        AccountType   @map("account_type")
+  parentId           String?       @map("parent_id") @db.Uuid
+  level              Int           @default(1)
+  isGroup            Boolean       @default(false) @map("is_group")
+  normalBalance      NormalBalance @map("normal_balance")
+  openingBalance     Int           @default(0) @map("opening_balance")
+  openingBalanceDate DateTime?     @map("opening_balance_date") @db.Date
+  path               String        @db.VarChar(200)
+  allowManualPosting Boolean       @default(true) @map("allow_manual_posting")
+  costCenter         String?       @map("cost_center") @db.VarChar(50)
+  isActive           Boolean       @default(true) @map("is_active")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  parent             ChartOfAccount?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children           ChartOfAccount[] @relation("AccountHierarchy")
+  journalLines       JournalLine[]
+  bankAccounts       BankAccount[]
+  budgetLines        BudgetLine[]
+  taxesPayable       Tax[]            @relation("TaxPayableAccount")
+  taxesReceivable    Tax[]            @relation("TaxReceivableAccount")
+  reserveFunds       ReserveFund[]
+
+  @@index([parentId])
+  @@index([path])
+  @@map("chart_of_accounts")
+}
+
+model FiscalPeriod {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  academicOrFiscalYear String             @map("academic_or_fiscal_year")
+  periodMonth          Int                @map("period_month")
+  periodYear           Int                @map("period_year")
+  startDate            DateTime           @map("start_date") @db.Date
+  endDate              DateTime           @map("end_date") @db.Date
+  status               FiscalPeriodStatus @default(open)
+  closedBy             String?            @map("closed_by") @db.Uuid
+  closedAt             DateTime?          @map("closed_at")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  journals             JournalEntry[]
+
+  @@unique([periodYear, periodMonth])
+  @@map("fiscal_periods")
+}
+
+model PostingRule {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  referenceType     String   @map("reference_type")
+  variant           String   @default("")
+  debitAccountCode  String   @map("debit_account_code")
+  creditAccountCode String   @map("credit_account_code")
+  costCenter        String?  @map("cost_center")
+  isActive          Boolean  @default(true) @map("is_active")
+  description       String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([referenceType, variant])
+  @@map("posting_rules")
+}
+
+model JournalEntry {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entryNumber          String             @unique @map("entry_number")
+  entryDate            DateTime           @map("entry_date") @db.Date
+  fiscalPeriodId       String             @map("fiscal_period_id") @db.Uuid
+  entryType            JournalEntryType   @map("entry_type")
+  referenceType        String?            @map("reference_type")
+  referenceId          String?            @map("reference_id") @db.Uuid
+  description          String
+  status               JournalEntryStatus @default(draft)
+  totalDebit           Int                @default(0) @map("total_debit")
+  totalCredit          Int                @default(0) @map("total_credit")
+  costCenter           String?            @map("cost_center")
+  reversesJournalId    String?            @unique @map("reverses_journal_id") @db.Uuid
+  postedAt             DateTime?          @map("posted_at")
+  postedBy             String?            @map("posted_by") @db.Uuid
+  submittedBy          String?            @map("submitted_by") @db.Uuid
+  approvedBy           String?            @map("approved_by") @db.Uuid
+  rejectionReason      String?            @map("rejection_reason")
+  attachmentId         String?            @map("attachment_id") @db.Uuid
+  idempotencyReference String?            @unique @map("idempotency_reference")
+  budgetOverrideReason String?            @map("budget_override_reason")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  fiscalPeriod         FiscalPeriod       @relation(fields: [fiscalPeriodId], references: [id])
+  lines                JournalLine[]
+  reverses             JournalEntry?      @relation("JournalReversal", fields: [reversesJournalId], references: [id])
+  reversedBy           JournalEntry?      @relation("JournalReversal")
+  vouchers             Voucher[]
+  cheques              Cheque[]
+  budgetConsumptions   BudgetConsumption[]
+  taxTransactions      TaxTransaction[]
+  creditNotes          CreditDebitNote[]
+  profitAppropriations ProfitAppropriation[]
+
+  @@index([entryDate])
+  @@index([status])
+  @@index([referenceType, referenceId])
+  @@index([fiscalPeriodId])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  journalId       String         @map("journal_id") @db.Uuid
+  lineNumber      Int            @map("line_number")
+  accountId       String         @map("account_id") @db.Uuid
+  debitAmount     Int            @default(0) @map("debit_amount")
+  creditAmount    Int            @default(0) @map("credit_amount")
+  costCenter      String?        @map("cost_center")
+  narration       String?
+  referenceType   String?        @map("reference_type")
+  referenceId     String?        @map("reference_id") @db.Uuid
+  taxId           String?        @map("tax_id") @db.Uuid
+
+  journal         JournalEntry   @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  account         ChartOfAccount @relation(fields: [accountId], references: [id])
+  matchedStatementLines BankStatementLine[]
+
+  @@index([accountId, journalId])
+  @@index([journalId])
+  @@index([referenceType, referenceId])
+  @@map("journal_lines")
+}
+
+model RecurringJournalTemplate {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  frequency             RecurringFrequency
+  nextRunDate           DateTime            @map("next_run_date") @db.Date
+  lines                 Json                @db.Json
+  description           String?
+  isActive              Boolean             @default(true) @map("is_active")
+  lastGeneratedJournalId String?            @map("last_generated_journal_id") @db.Uuid
+  createdBy             String              @map("created_by") @db.Uuid
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+
+  @@map("recurring_journal_templates")
+}
+
+model BankAccount {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountName    String          @map("account_name")
+  accountNumber  String          @map("account_number")
+  bankName       String          @map("bank_name")
+  branch         String?
+  accountType    BankAccountType @map("account_type")
+  coaAccountId   String          @map("coa_account_id") @db.Uuid
+  openingBalance Int             @default(0) @map("opening_balance")
+  currencyCode   String          @default("BDT") @map("currency_code")
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  coaAccount     ChartOfAccount  @relation(fields: [coaAccountId], references: [id])
+  vouchers       Voucher[]
+  cheques        Cheque[]
+  statements     BankStatement[]
+  reconciliations Reconciliation[]
+
+  @@map("bank_accounts")
+}
+
+model Voucher {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  voucherNumber String        @unique @map("voucher_number")
+  voucherType   VoucherType   @map("voucher_type")
+  voucherDate   DateTime      @map("voucher_date") @db.Date
+  bankAccountId String?       @map("bank_account_id") @db.Uuid
+  partyType     PartyType?    @map("party_type")
+  partyId       String?       @map("party_id") @db.Uuid
+  partyName     String?       @map("party_name")
+  amount        Int
+  narration     String
+  journalId     String?       @map("journal_id") @db.Uuid
+  status        VoucherStatus @default(draft)
+  attachmentId  String?       @map("attachment_id") @db.Uuid
+  preparedBy    String        @map("prepared_by") @db.Uuid
+  approvedBy    String?       @map("approved_by") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  bankAccount   BankAccount?  @relation(fields: [bankAccountId], references: [id])
+  journal       JournalEntry? @relation(fields: [journalId], references: [id])
+  cheques       Cheque[]
+  disbursements ProfitDisbursement[]
+
+  @@index([voucherDate])
+  @@index([voucherType, status])
+  @@map("vouchers")
+}
+
+model Cheque {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chequeNumber  String          @map("cheque_number")
+  bankAccountId String          @map("bank_account_id") @db.Uuid
+  direction     ChequeDirection
+  partyName     String          @map("party_name")
+  amount        Int
+  chequeDate    DateTime        @map("cheque_date") @db.Date
+  status        ChequeStatus    @default(pending)
+  clearedDate   DateTime?       @map("cleared_date") @db.Date
+  bounceReason  String?         @map("bounce_reason")
+  voucherId     String?         @map("voucher_id") @db.Uuid
+  journalId     String?         @map("journal_id") @db.Uuid
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  bankAccount   BankAccount     @relation(fields: [bankAccountId], references: [id])
+  voucher       Voucher?        @relation(fields: [voucherId], references: [id])
+  journal       JournalEntry?   @relation(fields: [journalId], references: [id])
+
+  @@index([status, chequeDate])
+  @@map("cheques")
+}
+
+model BankStatement {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bankAccountId   String              @map("bank_account_id") @db.Uuid
+  statementDate   DateTime            @map("statement_date") @db.Date
+  openingBalance  Int                 @map("opening_balance")
+  closingBalance  Int                 @map("closing_balance")
+  attachmentId    String?             @map("attachment_id") @db.Uuid
+  importedBy      String              @map("imported_by") @db.Uuid
+  status          BankStatementStatus @default(importing)
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  bankAccount     BankAccount         @relation(fields: [bankAccountId], references: [id])
+  lines           BankStatementLine[]
+
+  @@map("bank_statements")
+}
+
+model BankStatementLine {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  statementId         String          @map("statement_id") @db.Uuid
+  transactionDate    DateTime        @map("transaction_date") @db.Date
+  description         String
+  reference           String?
+  debitAmount         Int             @default(0) @map("debit_amount")
+  creditAmount        Int             @default(0) @map("credit_amount")
+  runningBalance      Int             @map("running_balance")
+  matchedJournalLineId String?        @map("matched_journal_line_id") @db.Uuid
+  matchStatus         BankMatchStatus @default(unmatched) @map("match_status")
+  matchedBy           String?         @map("matched_by") @db.Uuid
+  ignoreReason        String?         @map("ignore_reason")
+
+  statement           BankStatement   @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  matchedJournalLine  JournalLine?    @relation(fields: [matchedJournalLineId], references: [id])
+
+  @@index([statementId, matchStatus])
+  @@map("bank_statement_lines")
+}
+
+model Reconciliation {
+  id                      String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bankAccountId           String               @map("bank_account_id") @db.Uuid
+  periodStart             DateTime             @map("period_start") @db.Date
+  periodEnd               DateTime             @map("period_end") @db.Date
+  statementClosingBalance Int                  @map("statement_closing_balance")
+  systemClosingBalance    Int                  @map("system_closing_balance")
+  difference              Int                  @default(0)
+  unreconciledCount       Int                  @default(0) @map("unreconciled_count")
+  status                  ReconciliationStatus @default(in_progress)
+  completedBy             String?              @map("completed_by") @db.Uuid
+  completedAt             DateTime?            @map("completed_at")
+  notes                   String?
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @updatedAt @map("updated_at")
+
+  bankAccount             BankAccount          @relation(fields: [bankAccountId], references: [id])
+
+  @@map("reconciliations")
+}
+
+model ArLedger {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  partyType         PartyType      @map("party_type")
+  partyId           String         @map("party_id") @db.Uuid
+  sourceType        ArSourceType   @map("source_type")
+  sourceId          String         @map("source_id") @db.Uuid
+  invoiceNumber     String         @map("invoice_number")
+  invoiceDate       DateTime       @map("invoice_date") @db.Date
+  dueDate           DateTime       @map("due_date") @db.Date
+  grossAmount       Int            @map("gross_amount")
+  settledAmount     Int            @default(0) @map("settled_amount")
+  outstandingAmount Int            @map("outstanding_amount")
+  status            ArLedgerStatus @default(open)
+  costCenter        String         @map("cost_center")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  followUps         CollectionFollowUp[]
+  notes             CreditDebitNote[]
+
+  @@index([partyType, partyId, status])
+  @@index([dueDate, status])
+  @@index([costCenter])
+  @@map("ar_ledger")
+}
+
+model ApLedger {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  partyType         ApPartyType  @map("party_type")
+  partyId           String       @map("party_id") @db.Uuid
+  sourceType        ApSourceType @map("source_type")
+  sourceId          String       @map("source_id") @db.Uuid
+  invoiceNumber     String?      @map("invoice_number")
+  invoiceDate       DateTime     @map("invoice_date") @db.Date
+  dueDate           DateTime     @map("due_date") @db.Date
+  grossAmount       Int          @map("gross_amount")
+  settledAmount     Int          @default(0) @map("settled_amount")
+  outstandingAmount Int          @map("outstanding_amount")
+  status            ArLedgerStatus @default(open)
+  costCenter        String       @map("cost_center")
+  scheduledPayDate  DateTime?    @map("scheduled_pay_date") @db.Date
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  @@index([partyType, partyId, status])
+  @@index([dueDate, status])
+  @@map("ap_ledger")
+}
+
+model CollectionFollowUp {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  arLedgerId           String            @map("ar_ledger_id") @db.Uuid
+  followUpDate         DateTime          @map("follow_up_date") @db.Date
+  channel              CollectionChannel
+  outcome              String
+  promisedPaymentDate  DateTime?         @map("promised_payment_date") @db.Date
+  notes                String?
+  recordedBy           String            @map("recorded_by") @db.Uuid
+  createdAt            DateTime          @default(now()) @map("created_at")
+
+  arLedger             ArLedger          @relation(fields: [arLedgerId], references: [id])
+
+  @@map("collection_follow_ups")
+}
+
+model CreditDebitNote {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  noteNumber        String     @unique @map("note_number")
+  partyType         PartyType  @map("party_type")
+  partyId           String     @map("party_id") @db.Uuid
+  referenceInvoice  String?    @map("reference_invoice")
+  arLedgerId        String?    @map("ar_ledger_id") @db.Uuid
+  amount            Int
+  reason            String
+  noteType          NoteType   @map("note_type")
+  approvedBy        String?    @map("approved_by") @db.Uuid
+  journalId         String?    @map("journal_id") @db.Uuid
+  status            NoteStatus @default(draft)
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  arLedger          ArLedger?  @relation(fields: [arLedgerId], references: [id])
+  journal           JournalEntry? @relation(fields: [journalId], references: [id])
+
+  @@map("credit_notes")
+}
+
+model Tax {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                 String    @unique
+  name                 String
+  taxType              TaxType   @map("tax_type")
+  ratePercent          Decimal   @map("rate_percent") @db.Decimal(6, 3)
+  isInclusive          Boolean   @default(false) @map("is_inclusive")
+  payableAccountId     String    @map("payable_account_id") @db.Uuid
+  receivableAccountId  String?   @map("receivable_account_id") @db.Uuid
+  effectiveFrom        DateTime  @map("effective_from") @db.Date
+  effectiveTo          DateTime? @map("effective_to") @db.Date
+  isActive             Boolean   @default(true) @map("is_active")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  payableAccount       ChartOfAccount  @relation("TaxPayableAccount", fields: [payableAccountId], references: [id])
+  receivableAccount    ChartOfAccount? @relation("TaxReceivableAccount", fields: [receivableAccountId], references: [id])
+  transactions         TaxTransaction[]
+
+  @@map("taxes")
+}
+
+model TaxTransaction {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taxId          String       @map("tax_id") @db.Uuid
+  journalId      String       @map("journal_id") @db.Uuid
+  taxableAmount  Int          @map("taxable_amount")
+  taxAmount      Int          @map("tax_amount")
+  direction      TaxDirection
+  partyName      String?      @map("party_name")
+  transactionDate DateTime    @map("transaction_date") @db.Date
+  filingPeriod   String       @map("filing_period")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  tax            Tax          @relation(fields: [taxId], references: [id])
+  journal        JournalEntry @relation(fields: [journalId], references: [id])
+
+  @@index([taxId, filingPeriod])
+  @@map("tax_transactions")
+}
+
+model Budget {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fiscalYear       String                @map("fiscal_year")
+  name             String
+  costCenter       String                @map("cost_center")
+  department       String?
+  status           BudgetStatus          @default(draft)
+  version          Int                   @default(1)
+  previousVersionId String?              @map("previous_version_id") @db.Uuid
+  totalAmount      Int                   @default(0) @map("total_amount")
+  approvedBy       String?               @map("approved_by") @db.Uuid
+  approvedAt       DateTime?             @map("approved_at")
+  enforcementMode  BudgetEnforcementMode @default(warn) @map("enforcement_mode")
+  createdBy        String                @map("created_by") @db.Uuid
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  previousVersion  Budget?               @relation("BudgetVersions", fields: [previousVersionId], references: [id])
+  newerVersions    Budget[]              @relation("BudgetVersions")
+  lines            BudgetLine[]
+  revisions        BudgetRevision[]
+
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  budgetId        String   @map("budget_id") @db.Uuid
+  accountId       String   @map("account_id") @db.Uuid
+  periodMonth     Int?     @map("period_month")
+  allocatedAmount Int      @map("allocated_amount")
+  revisedAmount   Int?     @map("revised_amount")
+  notes           String?
+
+  budget          Budget         @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  account         ChartOfAccount @relation(fields: [accountId], references: [id])
+  consumptions    BudgetConsumption[]
+
+  @@index([budgetId])
+  @@map("budget_lines")
+}
+
+model BudgetRevision {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  budgetId    String    @map("budget_id") @db.Uuid
+  fromVersion Int       @map("from_version")
+  toVersion   Int       @map("to_version")
+  reason      String
+  requestedBy String    @map("requested_by") @db.Uuid
+  approvedBy  String?   @map("approved_by") @db.Uuid
+  approvedAt  DateTime? @map("approved_at")
+  changes     Json      @db.Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  budget      Budget    @relation(fields: [budgetId], references: [id])
+
+  @@map("budget_revisions")
+}
+
+model BudgetConsumption {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  budgetLineId String       @map("budget_line_id") @db.Uuid
+  journalId    String       @map("journal_id") @db.Uuid
+  amount       Int
+  postedAt     DateTime     @default(now()) @map("posted_at")
+
+  budgetLine   BudgetLine   @relation(fields: [budgetLineId], references: [id])
+  journal      JournalEntry @relation(fields: [journalId], references: [id])
+
+  @@index([budgetLineId])
+  @@map("budget_consumption")
+}
+
+model FinancialStatementNote {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fiscalYear    String   @map("fiscal_year")
+  statementType String   @map("statement_type")
+  noteNumber    Int      @map("note_number")
+  title         String
+  body          String
+  createdBy     String   @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("financial_statement_notes")
+}

@@ -113,6 +113,7 @@ export class FeePaymentService {
       debitAccountCode: cashOrBankAccount(result.payment.method),
       creditAccountCode: ACCOUNT_AR_STUDENTS,
       postingDate: result.payment.paymentDate,
+      payload: { paymentMethod: result.payment.method, variant: result.payment.method },
     });
 
     await this.events.emitAsync(EventNames.FEE_PAYMENT_RECEIVED, {
