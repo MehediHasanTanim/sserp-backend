@@ -8,6 +8,10 @@ import { seedPhase1 } from './phase1.seed';
 import { seedPhase2 } from './phase2.seed';
 import { seedPhase3 } from './phase3.seed';
 import { seedPhase4 } from './phase4.seed';
+import { seedPhase5 } from './phase5.seed';
+import { seedPhase6 } from './phase6.seed';
+import { seedPhase7 } from './phase7.seed';
+import { seedPhase8 } from './phase8.seed';
 import { seedDemo } from './demo.seed';
 
 const prisma = new PrismaClient();
@@ -139,6 +143,17 @@ const MATRIX: Record<PermissionModule, Record<string, Cell>> = {
     accountant: 'none',
     receptionist: 'none',
     parent: 'full',
+  },
+  notifications: {
+    super_admin: 'full',
+    principal: 'full',
+    coordinator: 'read',
+    teacher: 'read',
+    therapist: 'read',
+    hr_officer: 'read',
+    accountant: 'read',
+    receptionist: 'read',
+    parent: 'none',
   },
 };
 
@@ -415,6 +430,10 @@ async function main() {
   await seedPhase2(prisma);
   await seedPhase3(prisma);
   await seedPhase4(prisma);
+  await seedPhase5(prisma);
+  await seedPhase6(prisma);
+  await seedPhase7(prisma);
+  await seedPhase8(prisma);
 
   if (process.env.SEED_DEMO === 'true') {
     await seedDemo(prisma);

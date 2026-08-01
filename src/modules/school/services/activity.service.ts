@@ -36,7 +36,11 @@ export class ActivityService {
 
   async updateType(
     id: string,
-    data: Partial<{ name: string; defaultFeeAmount: number; isActive: boolean }>,
+    data: Partial<{
+      name: string;
+      defaultFeeAmount: number;
+      isActive: boolean;
+    }>,
   ) {
     return this.prisma.activityType.update({ where: { id }, data });
   }
@@ -53,7 +57,10 @@ export class ActivityService {
             }
           : {}),
       },
-      include: { activityType: true, _count: { select: { enrollments: true } } },
+      include: {
+        activityType: true,
+        _count: { select: { enrollments: true } },
+      },
       orderBy: { activityDate: 'asc' },
     });
   }
@@ -163,7 +170,9 @@ export class ActivityEnrollmentService {
   listEnrollments(activityId: string) {
     return this.prisma.activityEnrollment.findMany({
       where: { activityId },
-      include: { student: { select: { id: true, fullName: true, studentCode: true } } },
+      include: {
+        student: { select: { id: true, fullName: true, studentCode: true } },
+      },
       orderBy: [{ enrollmentState: 'asc' }, { waitlistPosition: 'asc' }],
     });
   }
@@ -238,78 +247,80 @@ export class ActivityEnrollmentService {
       return row;
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`
+    return this.prisma
+      .$transaction(async (tx) => {
+        await tx.$queryRaw`
         SELECT id FROM outdoor_activities WHERE id = ${params.activityId}::uuid FOR UPDATE
       `;
-      const confirmedCount = await tx.activityEnrollment.count({
-        where: {
-          activityId: params.activityId,
-          enrollmentState: 'confirmed',
-        },
-      });
-
-      let enrollmentState: 'confirmed' | 'waitlisted' = 'confirmed';
-      let waitlistPosition: number | null = null;
-      if (confirmedCount >= activity.capacity) {
-        if (!activity.waitlistEnabled) {
-          throw DomainException.conflict('Activity is at capacity');
-        }
-        enrollmentState = 'waitlisted';
-        const maxPos = await tx.activityEnrollment.aggregate({
+        const confirmedCount = await tx.activityEnrollment.count({
           where: {
             activityId: params.activityId,
-            enrollmentState: 'waitlisted',
+            enrollmentState: 'confirmed',
           },
-          _max: { waitlistPosition: true },
         });
-        waitlistPosition = (maxPos._max.waitlistPosition ?? 0) + 1;
-      }
 
-      const enrollment = await tx.activityEnrollment.upsert({
-        where: {
-          activityId_studentId: {
+        let enrollmentState: 'confirmed' | 'waitlisted' = 'confirmed';
+        let waitlistPosition: number | null = null;
+        if (confirmedCount >= activity.capacity) {
+          if (!activity.waitlistEnabled) {
+            throw DomainException.conflict('Activity is at capacity');
+          }
+          enrollmentState = 'waitlisted';
+          const maxPos = await tx.activityEnrollment.aggregate({
+            where: {
+              activityId: params.activityId,
+              enrollmentState: 'waitlisted',
+            },
+            _max: { waitlistPosition: true },
+          });
+          waitlistPosition = (maxPos._max.waitlistPosition ?? 0) + 1;
+        }
+
+        const enrollment = await tx.activityEnrollment.upsert({
+          where: {
+            activityId_studentId: {
+              activityId: params.activityId,
+              studentId: params.studentId,
+            },
+          },
+          create: {
             activityId: params.activityId,
             studentId: params.studentId,
+            consentStatus: 'confirmed',
+            enrollmentState,
+            waitlistPosition,
+            consentChannel: params.channel,
+            consentRecordedAt: new Date(),
+            consentRecordedBy: params.actorUserId,
           },
-        },
-        create: {
-          activityId: params.activityId,
-          studentId: params.studentId,
-          consentStatus: 'confirmed',
-          enrollmentState,
-          waitlistPosition,
-          consentChannel: params.channel,
-          consentRecordedAt: new Date(),
-          consentRecordedBy: params.actorUserId,
-        },
-        update: {
-          consentStatus: 'confirmed',
-          enrollmentState,
-          waitlistPosition,
-          consentRecordedAt: new Date(),
-          declinedReason: null,
-        },
+          update: {
+            consentStatus: 'confirmed',
+            enrollmentState,
+            waitlistPosition,
+            consentRecordedAt: new Date(),
+            declinedReason: null,
+          },
+        });
+
+        if (enrollmentState === 'confirmed') {
+          await tx.outdoorActivity.update({
+            where: { id: params.activityId },
+            data: { participantCount: { increment: 1 } },
+          });
+        }
+
+        return enrollment;
+      })
+      .then(async (enrollment) => {
+        if (enrollment.enrollmentState === 'confirmed') {
+          await this.events.emitAsync(EventNames.ACTIVITY_OPTIN_CONFIRMED, {
+            activityId: params.activityId,
+            studentId: params.studentId,
+            enrollmentId: enrollment.id,
+          });
+        }
+        return enrollment;
       });
-
-      if (enrollmentState === 'confirmed') {
-        await tx.outdoorActivity.update({
-          where: { id: params.activityId },
-          data: { participantCount: { increment: 1 } },
-        });
-      }
-
-      return enrollment;
-    }).then(async (enrollment) => {
-      if (enrollment.enrollmentState === 'confirmed') {
-        await this.events.emitAsync(EventNames.ACTIVITY_OPTIN_CONFIRMED, {
-          activityId: params.activityId,
-          studentId: params.studentId,
-          enrollmentId: enrollment.id,
-        });
-      }
-      return enrollment;
-    });
   }
 
   async withdraw(activityId: string, studentId: string) {
@@ -476,7 +487,11 @@ export class ActivityAttendanceService {
   /** O-08: writes only activity_attendance — never student_attendance. */
   async bulkMark(
     activityId: string,
-    marks: Array<{ studentId: string; status: 'present' | 'absent' | 'withdrew_last_minute'; remarks?: string }>,
+    marks: Array<{
+      studentId: string;
+      status: 'present' | 'absent' | 'withdrew_last_minute';
+      remarks?: string;
+    }>,
     markedBy: string,
   ) {
     const results = [];

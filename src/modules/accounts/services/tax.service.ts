@@ -49,7 +49,8 @@ export class TaxService {
       where: { id },
       data: {
         name: dto.name,
-        ratePercent: dto.ratePercent != null ? new Decimal(dto.ratePercent) : undefined,
+        ratePercent:
+          dto.ratePercent != null ? new Decimal(dto.ratePercent) : undefined,
         isInclusive: dto.isInclusive,
         effectiveTo: dto.effectiveTo,
         isActive: (dto as { isActive?: boolean }).isActive,

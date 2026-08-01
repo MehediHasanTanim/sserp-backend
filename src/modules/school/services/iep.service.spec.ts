@@ -132,9 +132,9 @@ describe('IepService', () => {
         goals: [],
       });
 
-      await expect(service.publish('iep1', 'coordinator1')).rejects.toMatchObject(
-        { statusCode: 422, code: 'IEP_INCOMPLETE' },
-      );
+      await expect(
+        service.publish('iep1', 'coordinator1'),
+      ).rejects.toMatchObject({ statusCode: 422, code: 'IEP_INCOMPLETE' });
     });
 
     it('rejects publishing when a goal is missing a responsible teacher', async () => {
@@ -147,9 +147,9 @@ describe('IepService', () => {
         goals: [{ ...activeTeacherGoal, responsibleTeacherId: null }],
       });
 
-      await expect(service.publish('iep1', 'coordinator1')).rejects.toMatchObject(
-        { statusCode: 422, code: 'IEP_INCOMPLETE' },
-      );
+      await expect(
+        service.publish('iep1', 'coordinator1'),
+      ).rejects.toMatchObject({ statusCode: 422, code: 'IEP_INCOMPLETE' });
     });
 
     it('rejects publishing an already-active plan (only drafts are editable)', async () => {
@@ -162,9 +162,9 @@ describe('IepService', () => {
         goals: [activeTeacherGoal],
       });
 
-      await expect(service.publish('iep1', 'coordinator1')).rejects.toMatchObject(
-        { statusCode: 409, code: 'IEP_NOT_EDITABLE' },
-      );
+      await expect(
+        service.publish('iep1', 'coordinator1'),
+      ).rejects.toMatchObject({ statusCode: 409, code: 'IEP_NOT_EDITABLE' });
     });
   });
 
@@ -237,7 +237,10 @@ describe('IepService', () => {
 
   describe('acknowledge', () => {
     it('creates a new acknowledgment and emits the event', async () => {
-      prisma.iepPlan.findUnique.mockResolvedValue({ id: 'iep1', status: 'active' });
+      prisma.iepPlan.findUnique.mockResolvedValue({
+        id: 'iep1',
+        status: 'active',
+      });
       prisma.iepAcknowledgment.findUnique.mockResolvedValue(null);
       prisma.iepAcknowledgment.create.mockResolvedValue({
         id: 'ack1',
@@ -265,7 +268,10 @@ describe('IepService', () => {
         guardianId: 'guardian1',
         acknowledgedAt: new Date('2024-01-01'),
       };
-      prisma.iepPlan.findUnique.mockResolvedValue({ id: 'iep1', status: 'active' });
+      prisma.iepPlan.findUnique.mockResolvedValue({
+        id: 'iep1',
+        status: 'active',
+      });
       prisma.iepAcknowledgment.findUnique.mockResolvedValue(existing);
 
       const result = await service.acknowledge('iep1', 'guardian1', {
@@ -278,7 +284,10 @@ describe('IepService', () => {
     });
 
     it('rejects acknowledgment of a draft plan', async () => {
-      prisma.iepPlan.findUnique.mockResolvedValue({ id: 'iep1', status: 'draft' });
+      prisma.iepPlan.findUnique.mockResolvedValue({
+        id: 'iep1',
+        status: 'draft',
+      });
 
       await expect(
         service.acknowledge('iep1', 'guardian1', { signatureText: 'x' }),

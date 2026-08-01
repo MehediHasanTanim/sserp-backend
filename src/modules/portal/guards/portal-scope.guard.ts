@@ -1,11 +1,13 @@
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-} from '@nestjs/common';
-import { DomainException, ErrorCode } from '../../../shared/errors/domain-exception';
+  DomainException,
+  ErrorCode,
+} from '../../../shared/errors/domain-exception';
 import { AuthUser } from '../../../shared/decorators';
-import { PortalScope, PortalScopeService } from '../services/portal-scope.service';
+import {
+  PortalScope,
+  PortalScopeService,
+} from '../services/portal-scope.service';
 
 @Injectable()
 export class PortalScopeGuard implements CanActivate {

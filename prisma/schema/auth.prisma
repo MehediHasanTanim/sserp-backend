@@ -13,6 +13,7 @@ model User {
   lockedUntil          DateTime? @map("locked_until")
   twoFactorSecret      String?   @map("two_factor_secret")
   twoFactorEnabled     Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorRecoveryCodes String[] @default([]) @map("two_factor_recovery_codes")
   passwordHistory      String[]  @default([]) @map("password_history")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
@@ -26,7 +27,19 @@ model User {
   refreshTokens    RefreshToken[]
   loginActivities  LoginActivity[]
   auditLogs        AuditLog[]
-  notifications    Notification[]
+  notifications            Notification[]
+  notificationPreferences  NotificationPreference[]
+  digestQueues             DigestQueue[]
+  digests                    Digest[]
+  messageThreadsCreated      MessageThread[]      @relation("MessageThreadCreator")
+  threadParticipants         ThreadParticipant[]
+  staffMessagesSent          StaffMessage[]       @relation("StaffMessageSender")
+  announcementsCreated       Announcement[]       @relation("AnnouncementCreator")
+  announcementReads          AnnouncementRead[]
+  noticeBoardItemsCreated    NoticeBoardItem[]    @relation("NoticeBoardCreator")
+  socketSessions             SocketSession[]
+  suppressionsCreated        SuppressionList[]    @relation("SuppressionCreator")
+  notificationTemplatesUpdated NotificationTemplate[] @relation("TemplateUpdatedBy")
   attachments      Attachment[]     @relation("UploadedBy")
   idempotencyKeys  IdempotencyKey[]
 
@@ -126,20 +139,33 @@ model AuditLog {
 }
 
 model Notification {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId            String    @map("user_id") @db.Uuid
-  type              String
-  title             String
-  body              String
-  entityType        String?   @map("entity_type")
-  entityId          String?   @map("entity_id")
-  channelsRequested String[]  @map("channels_requested")
-  readAt            DateTime? @map("read_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String               @map("user_id") @db.Uuid
+  type                 String
+  notificationTypeCode String?              @map("notification_type_code")
+  priority             NotificationPriority @default(normal)
+  title                String
+  body                 String
+  entityType           String?              @map("entity_type")
+  entityId             String?              @map("entity_id")
+  actionUrl            String?              @map("action_url")
+  data                 Json?
+  groupKey             String?              @map("group_key")
+  expiresAt            DateTime?            @map("expires_at")
+  channelsRequested    String[]             @map("channels_requested")
+  deliveredVia         String[]             @default([]) @map("delivered_via")
+  readAt               DateTime?            @map("read_at")
+  archivedAt           DateTime?            @map("archived_at")
+  createdAt            DateTime             @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+  digestQueueEntries DigestQueue[]
 
   @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([notificationTypeCode])
+  @@index([groupKey])
   @@map("notifications")
 }
 

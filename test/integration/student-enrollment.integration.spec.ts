@@ -1,20 +1,11 @@
-import { Test } from '@nestjs/testing';
-import {
-  INestApplication,
-  ValidationPipe,
-  VersioningType,
-} from '@nestjs/common';
-import * as cookieParser from 'cookie-parser';
-import { AppModule } from '../../src/app.module';
+import { INestApplication } from '@nestjs/common';
 import { PrismaService } from '../../src/shared/prisma/prisma.service';
 import { StudentService } from '../../src/modules/school/services/student.service';
 import { AdmissionFeeService } from '../../src/modules/school/services/admission-fee.service';
+import { createHarnessApp } from './helpers/harness.helper';
 
 /**
- * S-01/S-03: enrollment creates a pending admission fee and puts the
- * student in `pending_admission_fee`; full payment activates the student
- * and posts through `LedgerPort` into `pending_ledger_postings`.
- * Mirrors docs/plan/backend/02-phase1-hr-school-core.md §11.
+ * S-01/S-03 — pilot suite on shared harness.
  */
 describe('Student enrollment + admission fee integration', () => {
   let app: INestApplication;
@@ -25,19 +16,9 @@ describe('Student enrollment + admission fee integration', () => {
   let shiftId: string;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = moduleRef.createNestApplication();
-    app.setGlobalPrefix('api');
-    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-    app.use(cookieParser());
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    await app.init();
-
-    prisma = app.get(PrismaService);
+    const ctx = await createHarnessApp();
+    app = ctx.app;
+    prisma = ctx.prisma;
     students = app.get(StudentService);
     admissionFees = app.get(AdmissionFeeService);
 
@@ -50,11 +31,7 @@ describe('Student enrollment + admission fee integration', () => {
       where: { name: 'Morning' },
     });
     shiftId = morning.id;
-  }, 60000);
-
-  afterAll(async () => {
-    await app.close();
-  });
+  }, 180000);
 
   it('enroll() creates a pending fee and pending_admission_fee status', async () => {
     const student = await students.enroll(
@@ -121,7 +98,6 @@ describe('Student enrollment + admission fee integration', () => {
       amount: fee.amount,
     });
 
-    // Two postings total for this fee: the original invoice + the payment.
     const allPostings = await prisma.pendingLedgerPosting.findMany({
       where: { referenceType: 'admission_fee', referenceId: fee.id },
     });

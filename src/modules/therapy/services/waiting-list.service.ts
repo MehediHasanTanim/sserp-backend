@@ -51,13 +51,18 @@ export class WaitingListService {
       where: { id: waitingListId },
     });
     if (!entry) throw DomainException.notFound('Waiting list entry not found');
-    if (entry.status !== 'waiting') throw DomainException.conflict('Entry is not in waiting status');
+    if (entry.status !== 'waiting')
+      throw DomainException.conflict('Entry is not in waiting status');
 
     const expiresAt = new Date(Date.now() + OFFER_EXPIRY_HOURS * 3600000);
 
     const updated = await this.prisma.therapyWaitingList.update({
       where: { id: waitingListId },
-      data: { status: 'offered', offeredAt: new Date(), offerExpiresAt: expiresAt },
+      data: {
+        status: 'offered',
+        offeredAt: new Date(),
+        offerExpiresAt: expiresAt,
+      },
     });
 
     this.events.emit(EventNames.WAITING_LIST_OFFER_SENT, {

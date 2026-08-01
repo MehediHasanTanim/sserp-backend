@@ -30,6 +30,7 @@ export interface CreateRecurrenceDto {
   room?: string;
   startDate: Date;
   endDate?: Date;
+  endAfterSessions?: number;
   strict?: boolean;
 }
 
@@ -80,10 +81,14 @@ export class RecurrenceService {
 
   async create(dto: CreateRecurrenceDto, createdBy: string) {
     if (dto.recurrencePattern === 'weekly' && dto.dayOfWeek === undefined) {
-      throw DomainException.validation('dayOfWeek is required for weekly recurrence');
+      throw DomainException.validation(
+        'dayOfWeek is required for weekly recurrence',
+      );
     }
     if (dto.recurrencePattern === 'monthly' && dto.dayOfMonth === undefined) {
-      throw DomainException.validation('dayOfMonth is required for monthly recurrence');
+      throw DomainException.validation(
+        'dayOfMonth is required for monthly recurrence',
+      );
     }
 
     const recurrence = await this.prisma.therapyRecurrence.create({
@@ -96,11 +101,16 @@ export class RecurrenceService {
         recurrencePattern: dto.recurrencePattern,
         dayOfWeek: dto.dayOfWeek,
         dayOfMonth: dto.dayOfMonth,
-        startTime: wallClockToUtc(dto.startDate, dto.startTime.hour, dto.startTime.minute),
+        startTime: wallClockToUtc(
+          dto.startDate,
+          dto.startTime.hour,
+          dto.startTime.minute,
+        ),
         durationMinutes: dto.durationMinutes,
         room: dto.room,
         startDate: dto.startDate,
         endDate: dto.endDate,
+        endAfterSessions: dto.endAfterSessions,
         status: 'active',
         createdBy,
       },
@@ -108,8 +118,15 @@ export class RecurrenceService {
 
     // Materialise initial window
     const windowEnd = addDays(new Date(), ROLLING_WINDOW_DAYS);
-    const until = dto.endDate && dto.endDate < windowEnd ? dto.endDate : windowEnd;
-    await this.materialiseRange(recurrence.id, dto.startDate, until, dto.strict ?? false, createdBy);
+    const until =
+      dto.endDate && dto.endDate < windowEnd ? dto.endDate : windowEnd;
+    await this.materialiseRange(
+      recurrence.id,
+      dto.startDate,
+      until,
+      dto.strict ?? false,
+      createdBy,
+    );
 
     return recurrence;
   }
@@ -125,7 +142,12 @@ export class RecurrenceService {
       where: { id: recurrenceId },
     });
     if (!recurrence) throw DomainException.notFound('Recurrence not found');
-    if (recurrence.status !== 'active') throw new DomainException(ErrorCode.RECURRENCE_ENDED, 422, 'Recurrence is not active');
+    if (recurrence.status !== 'active')
+      throw new DomainException(
+        ErrorCode.RECURRENCE_ENDED,
+        422,
+        'Recurrence is not active',
+      );
 
     const skipped: string[] = [];
     let created = 0;
@@ -134,9 +156,19 @@ export class RecurrenceService {
     });
 
     const occurrences = this.expandDates(recurrence, from, until);
+    const sessionCap =
+      recurrence.endAfterSessions != null
+        ? Math.min(recurrence.endAfterSessions, MAX_SERIES_SESSIONS)
+        : MAX_SERIES_SESSIONS;
 
     for (const [index, occDate] of occurrences.entries()) {
-      if (sessionCount >= MAX_SERIES_SESSIONS) {
+      if (sessionCount >= sessionCap) {
+        if (
+          recurrence.endAfterSessions != null &&
+          sessionCount >= recurrence.endAfterSessions
+        ) {
+          break;
+        }
         throw new DomainException(
           ErrorCode.SERIES_CAP_EXCEEDED,
           422,
@@ -150,7 +182,9 @@ export class RecurrenceService {
         startTime.getUTCHours(),
         startTime.getUTCMinutes(),
       );
-      const scheduledEnd = new Date(scheduledStart.getTime() + recurrence.durationMinutes * 60000);
+      const scheduledEnd = new Date(
+        scheduledStart.getTime() + recurrence.durationMinutes * 60000,
+      );
 
       // Check if session for this occurrence already exists
       const existing = await this.prisma.therapySession.findFirst({
@@ -208,15 +242,25 @@ export class RecurrenceService {
   }
 
   private expandDates(
-    recurrence: { recurrencePattern: RecurrencePattern; startDate: Date; endDate: Date | null; dayOfWeek: number | null; dayOfMonth: number | null },
+    recurrence: {
+      recurrencePattern: RecurrencePattern;
+      startDate: Date;
+      endDate: Date | null;
+      dayOfWeek: number | null;
+      dayOfMonth: number | null;
+    },
     from: Date,
     until: Date,
   ): Date[] {
     const dates: Date[] = [];
-    const effectiveFrom = recurrence.startDate > from ? recurrence.startDate : from;
+    const effectiveFrom =
+      recurrence.startDate > from ? recurrence.startDate : from;
     let current = new Date(effectiveFrom);
 
-    if (recurrence.recurrencePattern === 'weekly' || recurrence.recurrencePattern === 'biweekly') {
+    if (
+      recurrence.recurrencePattern === 'weekly' ||
+      recurrence.recurrencePattern === 'biweekly'
+    ) {
       // Advance to first matching day
       const targetDay = recurrence.dayOfWeek ?? 1;
       while (current.getUTCDay() !== targetDay) {
@@ -239,7 +283,9 @@ export class RecurrenceService {
     } else if (recurrence.recurrencePattern === 'monthly') {
       const dayOfMonth = recurrence.dayOfMonth ?? 1;
       // Move to correct day of month
-      current = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), dayOfMonth));
+      current = new Date(
+        Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), dayOfMonth),
+      );
       if (current < effectiveFrom) current = addMonths(current, 1);
       while (current <= until) {
         if (!recurrence.endDate || current <= recurrence.endDate) {
@@ -326,7 +372,8 @@ export class RecurrenceService {
       patientId: changes.patientId ?? recurrence.patientId ?? undefined,
       groupId: changes.groupId ?? recurrence.groupId ?? undefined,
       therapyType: changes.therapyType ?? recurrence.therapyType,
-      recurrencePattern: changes.recurrencePattern ?? recurrence.recurrencePattern,
+      recurrencePattern:
+        changes.recurrencePattern ?? recurrence.recurrencePattern,
       dayOfWeek: changes.dayOfWeek ?? recurrence.dayOfWeek ?? undefined,
       dayOfMonth: changes.dayOfMonth ?? recurrence.dayOfMonth ?? undefined,
       startTime: changes.startTime ?? {
@@ -342,7 +389,11 @@ export class RecurrenceService {
     const newRecurrence = await this.prisma.therapyRecurrence.create({
       data: {
         ...newRecurrenceData,
-        startTime: wallClockToUtc(fromDate, newRecurrenceData.startTime.hour, newRecurrenceData.startTime.minute),
+        startTime: wallClockToUtc(
+          fromDate,
+          newRecurrenceData.startTime.hour,
+          newRecurrenceData.startTime.minute,
+        ),
         parentRecurrenceId: recurrenceId,
         createdBy: updatedBy,
         status: 'active',
@@ -350,11 +401,18 @@ export class RecurrenceService {
     });
 
     const windowEnd = addDays(new Date(), ROLLING_WINDOW_DAYS);
-    const until = newRecurrenceData.endDate && newRecurrenceData.endDate < windowEnd
-      ? newRecurrenceData.endDate
-      : windowEnd;
+    const until =
+      newRecurrenceData.endDate && newRecurrenceData.endDate < windowEnd
+        ? newRecurrenceData.endDate
+        : windowEnd;
 
-    await this.materialiseRange(newRecurrence.id, fromDate, until, false, updatedBy);
+    await this.materialiseRange(
+      newRecurrence.id,
+      fromDate,
+      until,
+      false,
+      updatedBy,
+    );
 
     return newRecurrence;
   }

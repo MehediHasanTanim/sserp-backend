@@ -85,16 +85,26 @@ export class BudgetService {
 
   async approve(id: string, approverId: string) {
     const budget = await this.findById(id);
-    if (budget.status !== 'draft') throw DomainException.conflict('Budget not in draft');
+    if (budget.status !== 'draft')
+      throw DomainException.conflict('Budget not in draft');
     const updated = await this.prisma.budget.update({
       where: { id },
-      data: { status: 'approved', approvedBy: approverId, approvedAt: new Date() },
+      data: {
+        status: 'approved',
+        approvedBy: approverId,
+        approvedAt: new Date(),
+      },
     });
     this.events.emit(EventNames.BUDGET_APPROVED, { budgetId: id });
     return updated;
   }
 
-  async revise(id: string, changes: BudgetLineDto[], reason: string, requestedBy: string) {
+  async revise(
+    id: string,
+    changes: BudgetLineDto[],
+    reason: string,
+    requestedBy: string,
+  ) {
     const budget = await this.findById(id);
     if (!['approved', 'revised'].includes(budget.status)) {
       throw DomainException.conflict('Only approved budgets can be revised');
@@ -143,16 +153,24 @@ export class BudgetService {
     });
     if (!revision) throw DomainException.notFound('Revision not found');
     const newBudget = await this.prisma.budget.findFirst({
-      where: { previousVersionId: revision.budgetId, version: revision.toVersion },
+      where: {
+        previousVersionId: revision.budgetId,
+        version: revision.toVersion,
+      },
     });
-    if (!newBudget) throw DomainException.notFound('New budget version not found');
+    if (!newBudget)
+      throw DomainException.notFound('New budget version not found');
     await this.prisma.budget.update({
       where: { id: revision.budgetId },
       data: { status: 'revised' },
     });
     return this.prisma.budget.update({
       where: { id: newBudget.id },
-      data: { status: 'approved', approvedBy: approverId, approvedAt: new Date() },
+      data: {
+        status: 'approved',
+        approvedBy: approverId,
+        approvedAt: new Date(),
+      },
     });
   }
 

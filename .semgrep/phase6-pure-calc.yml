@@ -1,0 +1,14 @@
+rules:
+  - id: phase6-pure-calc-no-prisma-import
+    languages: [typescript]
+    message: Pure calculation services must not import PrismaService or @prisma/client.
+    severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern-regex: from ['"]@prisma/client['"]
+          - pattern-regex: PrismaService
+    paths:
+      include:
+        - src/modules/inventory/services/stock-valuation.service.ts
+        - src/modules/inventory/services/depreciation.service.ts
+        - src/modules/procurement/services/three-way-match.service.ts

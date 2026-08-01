@@ -49,7 +49,10 @@ export class ActivityFeeService {
       });
       if (!activity) return null;
 
-      const feeAmount = activity.feeAmount > 0 ? activity.feeAmount : activity.activityType.defaultFeeAmount;
+      const feeAmount =
+        activity.feeAmount > 0
+          ? activity.feeAmount
+          : activity.activityType.defaultFeeAmount;
       if (feeAmount <= 0) return null;
 
       const student = await tx.student.findUnique({ where: { id: studentId } });
@@ -57,8 +60,11 @@ export class ActivityFeeService {
 
       const academicYear =
         (student.academicYearId
-          ? await tx.academicYear.findUnique({ where: { id: student.academicYearId } })
-          : null) ?? (await tx.academicYear.findFirst({ where: { isCurrent: true } }));
+          ? await tx.academicYear.findUnique({
+              where: { id: student.academicYearId },
+            })
+          : null) ??
+        (await tx.academicYear.findFirst({ where: { isCurrent: true } }));
       if (!academicYear) return null;
 
       const feeHead = await tx.feeHead.findUnique({
@@ -129,11 +135,16 @@ export class ActivityFeeService {
       invoiceType: 'activity',
     });
 
-    await notifyGuardiansForStudent(this.prisma, this.notifications, studentId, {
-      type: 'activity_fee_invoice',
-      title: 'Activity fee invoice issued',
-      body: `Invoice ${result.invoiceNumber} for ${result.netAmount} has been issued for an upcoming activity.`,
-    });
+    await notifyGuardiansForStudent(
+      this.prisma,
+      this.notifications,
+      studentId,
+      {
+        type: 'activity_fee_invoice',
+        title: 'Activity fee invoice issued',
+        body: `Invoice ${result.invoiceNumber} for ${result.netAmount} has been issued for an upcoming activity.`,
+      },
+    );
 
     return result;
   }

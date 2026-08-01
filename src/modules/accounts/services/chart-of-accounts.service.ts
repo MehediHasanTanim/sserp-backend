@@ -33,7 +33,9 @@ export class ChartOfAccountsService {
   }
 
   async findById(id: string) {
-    const account = await this.prisma.chartOfAccount.findUnique({ where: { id } });
+    const account = await this.prisma.chartOfAccount.findUnique({
+      where: { id },
+    });
     if (!account) throw DomainException.notFound('Account not found');
     return account;
   }
@@ -76,7 +78,8 @@ export class ChartOfAccountsService {
         },
       });
     } catch (e: any) {
-      if (e?.code === 'P2002') throw DomainException.conflict('Account code already exists');
+      if (e?.code === 'P2002')
+        throw DomainException.conflict('Account code already exists');
       throw e;
     }
   }
@@ -102,7 +105,13 @@ export class ChartOfAccountsService {
     });
   }
 
-  private buildTree(accounts: Array<{ id: string; parentId: string | null; [k: string]: unknown }>) {
+  private buildTree(
+    accounts: Array<{
+      id: string;
+      parentId: string | null;
+      [k: string]: unknown;
+    }>,
+  ) {
     const byParent = new Map<string | null, typeof accounts>();
     for (const a of accounts) {
       const key = a.parentId;

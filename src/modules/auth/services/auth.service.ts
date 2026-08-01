@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
@@ -11,6 +11,8 @@ import { TokenService } from './token.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
@@ -37,6 +39,25 @@ export class AuthService {
       ),
     ];
     return { user, roles, permissions };
+  }
+
+  private async resolveMustChangePassword(user: {
+    id: string;
+    mustChangePassword: boolean;
+    passwordChangedAt: Date;
+  }): Promise<boolean> {
+    if (user.mustChangePassword) return true;
+    const org = await this.prisma.organizationSettings.findFirst();
+    const maxAgeDays = org?.passwordMaxAgeDays;
+    if (maxAgeDays == null || maxAgeDays <= 0) return false;
+    const expiresAt = new Date(user.passwordChangedAt);
+    expiresAt.setUTCDate(expiresAt.getUTCDate() + maxAgeDays);
+    if (expiresAt > new Date()) return false;
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { mustChangePassword: true },
+    });
+    return true;
   }
 
   async login(
@@ -97,6 +118,7 @@ export class AuthService {
 
     await this.lockout.reset(identifier);
     const auth = await this.loadUserAuth(user!.id);
+    const mustChangePassword = await this.resolveMustChangePassword(user!);
 
     let scope: { studentIds: string[]; guardianProfileId: string } | undefined;
     if (user!.guardianId && auth.roles.includes('parent')) {
@@ -123,7 +145,7 @@ export class AuthService {
       email: user!.email,
       roles: auth.roles,
       permissions: auth.permissions,
-      mustChangePassword: user!.mustChangePassword,
+      mustChangePassword,
       scope,
     });
     const refresh = await this.tokens.issueRefresh({
@@ -161,7 +183,7 @@ export class AuthService {
         email: user!.email,
         roles: auth.roles,
         permissions: auth.permissions,
-        mustChangePassword: user!.mustChangePassword,
+        mustChangePassword,
       },
     };
   }
@@ -169,13 +191,14 @@ export class AuthService {
   async refresh(raw: string, meta: { ip?: string; userAgent?: string }) {
     const rotated = await this.tokens.rotateRefresh(raw, meta);
     const auth = await this.loadUserAuth(rotated.userId);
+    const mustChangePassword = await this.resolveMustChangePassword(auth.user);
     const access = await this.tokens.signAccess({
       sub: auth.user.id,
       username: auth.user.username,
       email: auth.user.email,
       roles: auth.roles,
       permissions: auth.permissions,
-      mustChangePassword: auth.user.mustChangePassword,
+      mustChangePassword,
     });
     return {
       accessToken: access.token,
@@ -186,7 +209,7 @@ export class AuthService {
         email: auth.user.email,
         roles: auth.roles,
         permissions: auth.permissions,
-        mustChangePassword: auth.user.mustChangePassword,
+        mustChangePassword,
       },
     };
   }
@@ -203,13 +226,14 @@ export class AuthService {
 
   async me(userId: string) {
     const auth = await this.loadUserAuth(userId);
+    const mustChangePassword = await this.resolveMustChangePassword(auth.user);
     return {
       id: auth.user.id,
       username: auth.user.username,
       email: auth.user.email,
       roles: auth.roles,
       permissions: auth.permissions,
-      mustChangePassword: auth.user.mustChangePassword,
+      mustChangePassword,
       lastLoginAt: auth.user.lastLoginAt,
     };
   }
@@ -249,9 +273,9 @@ export class AuthService {
     if (!user) return;
     const token = randomUUID();
     await this.cache.set(CacheKeys.passwordReset(token), user.id, 3600);
-    // Phase 0: no email send beyond console log
-    // eslint-disable-next-line no-console
-    console.log(`[password-reset] token for ${user.email}: ${token}`);
+    // Phase 0: log reset token for local/dev only (email channel lands later).
+    this.logger.log(`password-reset token issued for user ${user.id}`);
+    void token;
   }
 
   async resetPassword(token: string, newPassword: string) {

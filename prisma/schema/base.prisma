@@ -44,6 +44,7 @@ enum PermissionModule {
   inventory
   procurement
   reports
+  notifications
   admin
   portal
 }
@@ -710,4 +711,641 @@ enum AppropriationStatus {
 enum DisbursementStatus {
   pending
   paid
+}
+
+// ─── Phase 5: Payroll / Gratuity / HR Advanced ─────────────────────────────
+
+enum SalaryComponentType {
+  earning
+  deduction
+  employer_contribution
+}
+
+enum SalaryCalculationType {
+  fixed
+  percentage_of_basic
+  percentage_of_gross
+  formula
+  attendance_based
+}
+
+enum PayFrequency {
+  monthly
+}
+
+enum SalaryStructureStatus {
+  draft
+  active
+  superseded
+}
+
+enum PayrollRunStatus {
+  draft
+  calculating
+  calculated
+  approved
+  locked
+  paid
+  cancelled
+}
+
+enum PayrollSlipPaymentStatus {
+  pending
+  paid
+  failed
+}
+
+enum StatutoryDeductionType {
+  income_tax
+  provident_fund
+  other
+}
+
+enum StatutoryCalculationMethod {
+  slab
+  percentage
+  fixed
+}
+
+enum BonusType {
+  festival
+  performance
+  incentive
+  other
+}
+
+enum BonusStatus {
+  pending
+  approved
+  rejected
+  paid
+}
+
+enum PayrollAdjustmentType {
+  addition
+  deduction
+}
+
+enum PayrollAdjustmentSource {
+  manual
+  encashment
+  loan_repayment
+  advance_recovery
+}
+
+enum PayrollAdjustmentStatus {
+  pending
+  applied
+  cancelled
+}
+
+enum GratuitySalaryBasis {
+  basic
+  basic_plus_allowances
+  gross
+}
+
+enum GratuityProrationMethod {
+  monthly
+  daily
+  none
+}
+
+enum GratuityLedgerEntryType {
+  provision
+  adjustment
+  payment
+  forfeiture
+  opening
+}
+
+enum EncashmentStatus {
+  pending
+  hr_approved
+  approved
+  rejected
+  processed
+}
+
+enum EncashmentTrigger {
+  employee_request
+  exit_automatic
+}
+
+enum ReviewCycleType {
+  annual
+  bi_annual
+}
+
+enum ReviewCycleStatus {
+  planned
+  open
+  in_review
+  completed
+  closed
+}
+
+enum KpiMeasurementType {
+  rating
+  numeric
+  boolean
+}
+
+enum AppraisalFinalRating {
+  outstanding
+  exceeds
+  meets
+  needs_improvement
+  unsatisfactory
+}
+
+enum AppraisalStatus {
+  draft
+  self_submitted
+  manager_submitted
+  finalised
+  acknowledged
+}
+
+enum Feedback360Relationship {
+  peer
+  subordinate
+  other_manager
+}
+
+enum IncrementRecommendationStatus {
+  pending
+  approved
+  rejected
+  applied
+}
+
+enum JobRequisitionStatus {
+  draft
+  pending_approval
+  approved
+  rejected
+  on_hold
+  filled
+  cancelled
+}
+
+enum JobPostingStatus {
+  draft
+  published
+  closed
+}
+
+enum ApplicantStage {
+  applied
+  screening
+  shortlisted
+  interviewing
+  offered
+  accepted
+  rejected
+  withdrawn
+}
+
+enum InterviewType {
+  screening
+  technical
+  panel
+  final
+}
+
+enum InterviewMode {
+  in_person
+  video
+  phone
+}
+
+enum InterviewStatus {
+  scheduled
+  completed
+  cancelled
+  no_show
+}
+
+enum InterviewRecommendation {
+  proceed
+  hold
+  reject
+}
+
+enum OfferStatus {
+  draft
+  sent
+  accepted
+  declined
+  expired
+  withdrawn
+}
+
+enum TrainingProgramType {
+  in_house
+  external
+}
+
+enum TrainingProgramStatus {
+  planned
+  open
+  ongoing
+  completed
+  cancelled
+}
+
+enum TrainingEnrollmentStatus {
+  enrolled
+  attended
+  partially_attended
+  absent
+  withdrawn
+}
+
+enum TrainingAttendanceStatus {
+  present
+  absent
+  late
+}
+
+enum TrainingCostType {
+  fee
+  travel
+  material
+  venue
+  other
+}
+
+enum BenefitType {
+  health_insurance
+  life_insurance
+  other
+}
+
+enum BenefitEnrollmentStatus {
+  active
+  ended
+}
+
+enum EmployeeLoanType {
+  loan
+  salary_advance
+}
+
+enum EmployeeLoanStatus {
+  requested
+  approved
+  rejected
+  disbursed
+  repaying
+  closed
+  written_off
+}
+
+enum LoanRepaymentStatus {
+  scheduled
+  deducted
+  waived
+  overdue
+}
+
+enum BankTransferFileFormat {
+  csv
+  fixed_width
+  bank_specific
+}
+
+// Phase 6 — Inventory & Procurement
+
+enum ItemNature {
+  consumable
+  asset
+  spare
+}
+
+enum ValuationMethod {
+  fifo
+  weighted_average
+}
+
+enum LocationType {
+  store
+  department
+  room
+}
+
+enum StockMovementType {
+  receipt
+  issue
+  transfer_out
+  transfer_in
+  adjustment_increase
+  adjustment_decrease
+  return
+  disposal
+  opening
+}
+
+enum StockMovementReferenceType {
+  grn
+  issue_request
+  transfer
+  adjustment
+  audit
+  disposal
+  opening
+}
+
+enum StockIssueRequestStatus {
+  pending
+  approved
+  issued
+  partially_issued
+  rejected
+  cancelled
+}
+
+enum StockAdjustmentType {
+  increase
+  decrease
+}
+
+enum StockAdjustmentStatus {
+  draft
+  pending_approval
+  approved
+  rejected
+}
+
+enum DepreciationMethod {
+  straight_line
+  reducing_balance
+}
+
+enum AssetCondition {
+  new
+  good
+  fair
+  damaged
+  scrapped
+}
+
+enum AssetStatus {
+  in_store
+  assigned
+  under_repair
+  disposed
+  lost
+}
+
+enum AssetAssignedToType {
+  employee
+  department
+  room
+}
+
+enum AssetDisposalType {
+  sale
+  scrap
+  donation
+  write_off
+  lost
+}
+
+enum InventoryAuditType {
+  half_yearly
+  ad_hoc
+  cycle_count
+}
+
+enum InventoryAuditStatus {
+  scheduled
+  in_progress
+  counted
+  reviewed
+  signed_off
+  cancelled
+}
+
+enum DiscrepancyType {
+  match
+  surplus
+  shortage
+}
+
+enum CorrectiveActionStatus {
+  open
+  in_progress
+  completed
+  waived
+}
+
+enum VendorType {
+  supplier
+  service_provider
+  contractor
+}
+
+enum VendorStatus {
+  active
+  inactive
+  blacklisted
+}
+
+enum VendorDocumentType {
+  trade_license
+  tax_certificate
+  bank_letter
+  agreement
+  other
+}
+
+enum PurchaseRequestStatus {
+  draft
+  pending_dept_review
+  pending_principal_approval
+  approved
+  rejected
+  po_issued
+  partially_po_issued
+  closed
+  cancelled
+}
+
+enum PurchaseOrderStatus {
+  draft
+  pending_approval
+  approved
+  sent
+  partially_received
+  fully_received
+  closed
+  cancelled
+}
+
+enum GrnStatus {
+  draft
+  quality_check
+  accepted
+  partially_accepted
+  rejected
+  posted
+}
+
+enum InvoiceMatchStatus {
+  unmatched
+  matched
+  variance_within_tolerance
+  variance_exceeded
+}
+
+enum VendorInvoiceStatus {
+  draft
+  pending_approval
+  approved
+  rejected
+  partially_paid
+  paid
+  cancelled
+}
+
+enum VendorPaymentStatus {
+  scheduled
+  paid
+  cancelled
+}
+
+enum VendorAdvanceStatus {
+  open
+  partially_adjusted
+  fully_adjusted
+  refunded
+}
+
+// ─── Phase 7: Reports & Dashboards ─────────────────────────────────────────
+
+enum ReportEstimatedCost {
+  light
+  heavy
+}
+
+enum ReportVisibility {
+  private
+  role
+  organisation
+}
+
+enum ExportJobFormat {
+  pdf
+  xlsx
+  csv
+}
+
+enum ExportJobStatus {
+  queued
+  running
+  completed
+  failed
+  expired
+}
+
+enum ScheduledReportFrequency {
+  daily
+  weekly
+  monthly
+  quarterly
+}
+
+enum ScheduledReportRunStatus {
+  queued
+  running
+  completed
+  failed
+  skipped
+}
+
+enum MvRefreshStatus {
+  running
+  completed
+  failed
+}
+
+enum ReportRowLevelScope {
+  none
+  student
+  teacher
+  therapist
+  department
+}
+
+// ─── Phase 8: Notifications, Real-Time & Workflow ───────────────────────────
+
+enum NotificationPriority {
+  low
+  normal
+  high
+  critical
+}
+
+enum NotificationChannel {
+  in_app
+  email
+  sms
+}
+
+enum DeliveryStatus {
+  queued
+  sending
+  sent
+  delivered
+  failed
+  bounced
+  suppressed
+}
+
+enum DigestMode {
+  immediate
+  daily
+  weekly
+}
+
+enum SuppressionReason {
+  hard_bounce
+  complaint
+  invalid
+  manual
+  unsubscribed
+}
+
+enum MessageThreadType {
+  direct
+  group
+  announcement
+}
+
+enum ThreadParticipantRole {
+  owner
+  member
+}
+
+enum AnnouncementAudienceType {
+  all_staff
+  departments
+  roles
+  specific_users
+}
+
+enum AnnouncementStatus {
+  draft
+  published
+  expired
+  withdrawn
+}
+
+enum ApproverType {
+  role
+  specific_user
+  reporting_manager
+  department_head
 }

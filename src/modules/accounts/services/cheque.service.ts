@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ChequeDirection, ChequeStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { DomainException, ErrorCode } from '../../../shared/errors/domain-exception';
+import {
+  DomainException,
+  ErrorCode,
+} from '../../../shared/errors/domain-exception';
 import { EventNames } from '../../../shared/events/event-names';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 
@@ -47,7 +50,11 @@ export class ChequeService {
     return this.prisma.cheque.create({ data: dto });
   }
 
-  async transitionStatus(id: string, newStatus: ChequeStatus, options?: { reason?: string; clearedDate?: Date }) {
+  async transitionStatus(
+    id: string,
+    newStatus: ChequeStatus,
+    options?: { reason?: string; clearedDate?: Date },
+  ) {
     const cheque = await this.findById(id);
     const allowed = TRANSITIONS[cheque.status];
     if (!allowed.includes(newStatus)) {
@@ -65,7 +72,10 @@ export class ChequeService {
       data: {
         status: newStatus,
         bounceReason: newStatus === 'bounced' ? options!.reason : undefined,
-        clearedDate: newStatus === 'cleared' ? (options?.clearedDate ?? new Date()) : undefined,
+        clearedDate:
+          newStatus === 'cleared'
+            ? (options?.clearedDate ?? new Date())
+            : undefined,
       },
     });
     if (newStatus === 'bounced') {

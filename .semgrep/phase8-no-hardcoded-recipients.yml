@@ -1,0 +1,23 @@
+rules:
+  - id: phase8-no-hardcoded-recipients
+    languages: [typescript]
+    message: Notification recipients must be resolved via RecipientResolverService, not hardcoded emails/phones
+    severity: ERROR
+    patterns:
+      - pattern: |
+          notifications.notify({ ..., userId: "...", ... })
+      - pattern: |
+          notify({ ..., to: "$EMAIL", ... })
+      - pattern: |
+          sendMail({ to: "$EMAIL" })
+    paths:
+      include:
+        - src/modules/school/services/
+        - src/modules/therapy/services/
+        - src/modules/hr/services/
+        - src/modules/accounts/services/
+        - src/modules/inventory/services/
+        - src/modules/procurement/services/
+    metadata:
+      category: phase8
+      technology: nestjs

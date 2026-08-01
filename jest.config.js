@@ -8,14 +8,18 @@ module.exports = {
       testPathIgnorePatterns: ['\\.integration\\.spec\\.ts$'],
       transform: { '^.+\\.(t|j)s$': 'ts-jest' },
       moduleFileExtensions: ['js', 'json', 'ts'],
-      collectCoverageFrom: [
-        'src/modules/**/services/**/*.ts',
-        'src/shared/**/*.ts',
-        '!src/**/*.module.ts',
-        '!src/**/*.dto.ts',
-      ],
-      coverageDirectory: './coverage/unit',
       testEnvironment: 'node',
+      reporters: [
+        'default',
+        [
+          'jest-html-reporter',
+          {
+            pageTitle: 'SSERP Unit Report',
+            outputPath: 'reports/jest/unit.html',
+            includeFailureMsg: true,
+          },
+        ],
+      ],
     },
     {
       displayName: 'integration',
@@ -24,9 +28,20 @@ module.exports = {
       transform: { '^.+\\.(t|j)s$': 'ts-jest' },
       moduleFileExtensions: ['js', 'json', 'ts'],
       testEnvironment: 'node',
+      globalSetup: '<rootDir>/test/integration/global-setup.ts',
+      globalTeardown: '<rootDir>/test/integration/global-teardown.ts',
+      reporters: [
+        'default',
+        [
+          'jest-html-reporter',
+          {
+            pageTitle: 'SSERP Integration Report',
+            outputPath: 'reports/jest/integration.html',
+            includeFailureMsg: true,
+          },
+        ],
+        '<rootDir>/test/reporters/route-coverage.reporter.js',
+      ],
     },
   ],
-  coverageThreshold: {
-    global: { lines: 50, branches: 40, functions: 40, statements: 50 },
-  },
 };

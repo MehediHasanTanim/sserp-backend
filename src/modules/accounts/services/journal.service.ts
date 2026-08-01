@@ -31,7 +31,11 @@ export class JournalService {
     @Optional() private readonly budgetCheck?: BudgetCheckService,
   ) {}
 
-  async list(filters?: { status?: JournalEntryStatus; from?: Date; to?: Date }) {
+  async list(filters?: {
+    status?: JournalEntryStatus;
+    from?: Date;
+    to?: Date;
+  }) {
     return this.prisma.journalEntry.findMany({
       where: {
         status: filters?.status,
@@ -48,7 +52,9 @@ export class JournalService {
   async findById(id: string) {
     const entry = await this.prisma.journalEntry.findUnique({
       where: { id },
-      include: { lines: { include: { account: true }, orderBy: { lineNumber: 'asc' } } },
+      include: {
+        lines: { include: { account: true }, orderBy: { lineNumber: 'asc' } },
+      },
     });
     if (!entry) throw DomainException.notFound('Journal entry not found');
     return entry;
@@ -59,7 +65,11 @@ export class JournalService {
     const totalDebit = dto.lines.reduce((s, l) => s + l.debitAmount, 0);
     const totalCredit = dto.lines.reduce((s, l) => s + l.creditAmount, 0);
     if (totalDebit !== totalCredit) {
-      throw DomainException.withCode(ErrorCode.JOURNAL_UNBALANCED, 422, 'Journal unbalanced');
+      throw DomainException.withCode(
+        ErrorCode.JOURNAL_UNBALANCED,
+        422,
+        'Journal unbalanced',
+      );
     }
     const period = await this.fiscalPeriods.requireOpenForDate(dto.entryDate);
     const entryNumber = await this.numbering.nextCode('journal_entry');
@@ -96,14 +106,22 @@ export class JournalService {
   async updateDraft(id: string, dto: Partial<JournalDraftDto>) {
     const entry = await this.findById(id);
     if (entry.status !== 'draft') {
-      throw DomainException.withCode(ErrorCode.JOURNAL_IMMUTABLE, 409, 'Only draft entries can be edited');
+      throw DomainException.withCode(
+        ErrorCode.JOURNAL_IMMUTABLE,
+        409,
+        'Only draft entries can be edited',
+      );
     }
     if (dto.lines) {
       this.accounts.validateLines(dto.lines);
       const totalDebit = dto.lines.reduce((s, l) => s + l.debitAmount, 0);
       const totalCredit = dto.lines.reduce((s, l) => s + l.creditAmount, 0);
       if (totalDebit !== totalCredit) {
-        throw DomainException.withCode(ErrorCode.JOURNAL_UNBALANCED, 422, 'Journal unbalanced');
+        throw DomainException.withCode(
+          ErrorCode.JOURNAL_UNBALANCED,
+          422,
+          'Journal unbalanced',
+        );
       }
       await this.prisma.journalLine.deleteMany({ where: { journalId: id } });
       await this.prisma.journalEntry.update({
@@ -147,7 +165,9 @@ export class JournalService {
   async submit(id: string, userId: string) {
     const entry = await this.findById(id);
     if (entry.status !== 'draft') {
-      throw DomainException.conflict(`Cannot submit entry in status ${entry.status}`);
+      throw DomainException.conflict(
+        `Cannot submit entry in status ${entry.status}`,
+      );
     }
     return this.prisma.journalEntry.update({
       where: { id },
@@ -211,7 +231,8 @@ export class JournalService {
   }
 
   async reject(id: string, reason: string, userId: string) {
-    if (!reason?.trim()) throw DomainException.validation('Rejection reason is required');
+    if (!reason?.trim())
+      throw DomainException.validation('Rejection reason is required');
     const entry = await this.findById(id);
     if (entry.status !== 'submitted') {
       throw DomainException.conflict('Only submitted entries can be rejected');
@@ -228,7 +249,11 @@ export class JournalService {
       throw DomainException.conflict('Only posted entries can be reversed');
     }
     if (original.entryType === 'reversal') {
-      throw DomainException.withCode(ErrorCode.JOURNAL_IMMUTABLE, 409, 'Cannot reverse a reversal entry');
+      throw DomainException.withCode(
+        ErrorCode.JOURNAL_IMMUTABLE,
+        409,
+        'Cannot reverse a reversal entry',
+      );
     }
     const existingReversal = await this.prisma.journalEntry.findFirst({
       where: { reversesJournalId: id },

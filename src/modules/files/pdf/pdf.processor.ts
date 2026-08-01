@@ -28,9 +28,63 @@ export class PdfProcessor extends WorkerHost {
         return this.renderIep(job.data.iepId as string);
       case 'render-progress-report':
         return this.renderProgressReport(job.data.reportId as string);
+      case 'render-payslip':
+        return this.renderPayslip(job.data.slipId as string);
       default:
         this.logger.warn(`Unknown pdf job name: ${job.name}`);
     }
+  }
+
+  private async renderPayslip(slipId: string) {
+    const slip = await this.prisma.payrollSlip.findUnique({
+      where: { id: slipId },
+      include: {
+        lines: true,
+        employee: true,
+        payrollRun: true,
+      },
+    });
+    if (!slip) {
+      this.logger.warn(`render-payslip: slip ${slipId} not found`);
+      return;
+    }
+
+    const { buffer, mimeType } = await this.renderer.renderPdf({
+      templateName: 'payslip',
+      data: {
+        slip,
+        employee: slip.employee,
+        payrollRun: slip.payrollRun,
+      },
+    });
+
+    const objectKey = `${new Date().toISOString().slice(0, 10)}/payslip-${slip.slipNumber}.pdf`;
+    await this.minio.raw.putObject(
+      'hr-documents',
+      objectKey,
+      buffer,
+      buffer.length,
+      { 'Content-Type': mimeType },
+    );
+
+    const attachment = await this.prisma.attachment.create({
+      data: {
+        bucket: 'hr-documents',
+        objectKey,
+        originalFilename: `payslip-${slip.slipNumber}.pdf`,
+        mimeType,
+        sizeBytes: buffer.length,
+        entityType: 'payroll_slip',
+        entityId: slip.id,
+        uploadedBy: slip.employeeId,
+        status: 'confirmed',
+      },
+    });
+
+    await this.prisma.payrollSlip.update({
+      where: { id: slip.id },
+      data: { documentAttachmentId: attachment.id },
+    });
   }
 
   private async renderIep(iepId: string) {
@@ -49,9 +103,15 @@ export class PdfProcessor extends WorkerHost {
     });
 
     const objectKey = `${new Date().toISOString().slice(0, 10)}/iep-${plan.id}-v${plan.version}.pdf`;
-    await this.minio.raw.putObject('iep-documents', objectKey, buffer, buffer.length, {
-      'Content-Type': mimeType,
-    });
+    await this.minio.raw.putObject(
+      'iep-documents',
+      objectKey,
+      buffer,
+      buffer.length,
+      {
+        'Content-Type': mimeType,
+      },
+    );
 
     const attachment = await this.prisma.attachment.create({
       data: {
@@ -62,7 +122,8 @@ export class PdfProcessor extends WorkerHost {
         sizeBytes: buffer.length,
         entityType: 'iep_plan',
         entityId: plan.id,
-        uploadedBy: plan.approvedBy ?? plan.createdByTeacherId ?? plan.studentId,
+        uploadedBy:
+          plan.approvedBy ?? plan.createdByTeacherId ?? plan.studentId,
         status: 'confirmed',
       },
     });
@@ -89,9 +150,15 @@ export class PdfProcessor extends WorkerHost {
     });
 
     const objectKey = `${new Date().toISOString().slice(0, 10)}/progress-report-${report.id}.pdf`;
-    await this.minio.raw.putObject('progress-reports', objectKey, buffer, buffer.length, {
-      'Content-Type': mimeType,
-    });
+    await this.minio.raw.putObject(
+      'progress-reports',
+      objectKey,
+      buffer,
+      buffer.length,
+      {
+        'Content-Type': mimeType,
+      },
+    );
 
     const attachment = await this.prisma.attachment.create({
       data: {

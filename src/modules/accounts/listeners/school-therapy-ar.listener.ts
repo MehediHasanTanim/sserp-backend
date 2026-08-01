@@ -35,7 +35,8 @@ export class SchoolTherapyArListener {
       await this.receivables.createFromInvoice({
         partyType: 'student',
         partyId: invoice.studentId,
-        sourceType: invoice.invoiceType === 'activity' ? 'activity_fee' : 'tuition_fee',
+        sourceType:
+          invoice.invoiceType === 'activity' ? 'activity_fee' : 'tuition_fee',
         sourceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         invoiceDate: invoice.issueDate,
@@ -64,7 +65,9 @@ export class SchoolTherapyArListener {
         partyType: 'patient',
         partyId: invoice.patientId,
         sourceType:
-          invoice.sessionMode === 'group' ? 'therapy_group' : 'therapy_individual',
+          invoice.sessionMode === 'group'
+            ? 'therapy_group'
+            : 'therapy_individual',
         sourceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         invoiceDate: invoice.createdAt,

@@ -41,7 +41,8 @@ export class SchoolStudentReadService {
       where: { id, deletedAt: null, status: { not: 'withdrawn' } },
       select: SUMMARY_SELECT,
     });
-    if (!student) throw DomainException.notFound('Student not found or inactive');
+    if (!student)
+      throw DomainException.notFound('Student not found or inactive');
     return student;
   }
 

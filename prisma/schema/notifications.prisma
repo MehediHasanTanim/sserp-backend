@@ -1,0 +1,318 @@
+// Phase 8: Notifications, Real-Time & Workflow Configuration
+
+model NotificationType {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code               String               @unique
+  name               String
+  description        String?
+  module             String
+  category           String
+  defaultChannels    String[]             @map("default_channels")
+  allowedChannels    String[]             @map("allowed_channels")
+  isUserConfigurable Boolean              @default(true) @map("is_user_configurable")
+  priority           NotificationPriority @default(normal)
+  supportsDigest     Boolean              @default(true) @map("supports_digest")
+  isActive           Boolean              @default(true) @map("is_active")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  @@map("notification_types")
+}
+
+model NotificationTemplate {
+  id                   String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationTypeCode String              @map("notification_type_code")
+  channel              NotificationChannel
+  locale               String              @default("en")
+  subject              String?
+  body                 String
+  variables            Json                @default("[]")
+  isActive             Boolean             @default(true) @map("is_active")
+  version              Int                 @default(1)
+  updatedBy            String?             @map("updated_by") @db.Uuid
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  updater User? @relation("TemplateUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@unique([notificationTypeCode, channel, locale, isActive])
+  @@index([notificationTypeCode])
+  @@map("notification_templates")
+}
+
+model NotificationDelivery {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId    String              @map("notification_id") @db.Uuid
+  channel           NotificationChannel
+  recipientAddress  String?             @map("recipient_address")
+  provider          String?
+  providerMessageId String?             @map("provider_message_id")
+  status            DeliveryStatus      @default(queued)
+  attemptCount      Int                 @default(0) @map("attempt_count")
+  lastAttemptAt     DateTime?           @map("last_attempt_at")
+  deliveredAt       DateTime?           @map("delivered_at")
+  errorCode         String?             @map("error_code")
+  errorMessage      String?             @map("error_message")
+  contentSnapshot   String?             @map("content_snapshot")
+  costUnits         Int?                @map("cost_units")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  digests      Digest[]
+
+  @@index([notificationId])
+  @@index([status, lastAttemptAt])
+  @@index([channel, status])
+  @@map("notification_deliveries")
+}
+
+model NotificationPreference {
+  id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String     @map("user_id") @db.Uuid
+  notificationTypeCode String     @map("notification_type_code")
+  inAppEnabled         Boolean    @default(true) @map("in_app_enabled")
+  emailEnabled         Boolean    @default(true) @map("email_enabled")
+  smsEnabled           Boolean    @default(true) @map("sms_enabled")
+  digestMode           DigestMode @default(immediate) @map("digest_mode")
+  quietHoursStart      String?    @map("quiet_hours_start")
+  quietHoursEnd        String?    @map("quiet_hours_end")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationTypeCode])
+  @@index([userId, notificationTypeCode])
+  @@map("notification_preferences")
+}
+
+model SuppressionList {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  channel      NotificationChannel
+  address      String
+  reason       SuppressionReason
+  suppressedAt DateTime          @default(now()) @map("suppressed_at")
+  suppressedBy String?           @map("suppressed_by") @db.Uuid
+  notes        String?
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  suppressor User? @relation("SuppressionCreator", fields: [suppressedBy], references: [id], onDelete: SetNull)
+
+  @@unique([channel, address])
+  @@index([channel, address])
+  @@map("suppression_list")
+}
+
+model DigestQueue {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String     @map("user_id") @db.Uuid
+  notificationId     String     @map("notification_id") @db.Uuid
+  digestMode         DigestMode @map("digest_mode")
+  scheduledFor       DateTime   @map("scheduled_for")
+  includedInDigestId String?    @map("included_in_digest_id") @db.Uuid
+  createdAt          DateTime   @default(now()) @map("created_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  digest       Digest?      @relation(fields: [includedInDigestId], references: [id], onDelete: SetNull)
+
+  @@index([userId, scheduledFor])
+  @@map("digest_queue")
+}
+
+model Digest {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String     @map("user_id") @db.Uuid
+  digestMode        DigestMode @map("digest_mode")
+  periodStart       DateTime   @map("period_start")
+  periodEnd         DateTime   @map("period_end")
+  notificationCount Int        @map("notification_count")
+  sentAt            DateTime?  @map("sent_at")
+  deliveryId        String?    @map("delivery_id") @db.Uuid
+  createdAt         DateTime   @default(now()) @map("created_at")
+
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delivery        NotificationDelivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  queuedEntries   DigestQueue[]
+
+  @@map("digests")
+}
+
+model MessageThread {
+  id            String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  threadType    MessageThreadType @map("thread_type")
+  subject       String?
+  createdBy     String            @map("created_by") @db.Uuid
+  department    String?
+  targetRoles   String[]          @default([]) @map("target_roles")
+  isClosed      Boolean           @default(false) @map("is_closed")
+  lastMessageAt DateTime?         @map("last_message_at")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  creator      User                @relation("MessageThreadCreator", fields: [createdBy], references: [id])
+  participants ThreadParticipant[]
+  messages     StaffMessage[]
+
+  @@map("message_threads")
+}
+
+model ThreadParticipant {
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  threadId           String                @map("thread_id") @db.Uuid
+  userId             String                @map("user_id") @db.Uuid
+  role               ThreadParticipantRole @default(member)
+  joinedAt           DateTime              @default(now()) @map("joined_at")
+  leftAt             DateTime?             @map("left_at")
+  lastReadMessageId  String?               @map("last_read_message_id") @db.Uuid
+  isMuted            Boolean               @default(false) @map("is_muted")
+
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, threadId])
+  @@map("thread_participants")
+}
+
+model StaffMessage {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  threadId         String    @map("thread_id") @db.Uuid
+  senderUserId     String    @map("sender_user_id") @db.Uuid
+  body             String
+  attachmentIds    String[]  @default([]) @map("attachment_ids") @db.Uuid
+  replyToMessageId String?   @map("reply_to_message_id") @db.Uuid
+  editedAt         DateTime? @map("edited_at")
+  deletedAt        DateTime? @map("deleted_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender User          @relation("StaffMessageSender", fields: [senderUserId], references: [id])
+
+  @@index([threadId, createdAt])
+  @@map("messages")
+}
+
+model Announcement {
+  id            String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title         String
+  body          String
+  audienceType  AnnouncementAudienceType @map("audience_type")
+  audience      Json                     @default("{}")
+  publishAt     DateTime?                @map("publish_at")
+  expiresAt     DateTime?                @map("expires_at")
+  isPinned      Boolean                  @default(false) @map("is_pinned")
+  attachmentIds String[]                 @default([]) @map("attachment_ids") @db.Uuid
+  createdBy     String                   @map("created_by") @db.Uuid
+  status        AnnouncementStatus       @default(draft)
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
+
+  creator User               @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  reads   AnnouncementRead[]
+
+  @@index([status, publishAt])
+  @@index([expiresAt])
+  @@map("announcements")
+}
+
+model AnnouncementRead {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  announcementId String   @map("announcement_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  readAt         DateTime @default(now()) @map("read_at")
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@map("announcement_reads")
+}
+
+model NoticeBoardItem {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title         String
+  body          String
+  category      String?
+  attachmentIds String[]  @default([]) @map("attachment_ids") @db.Uuid
+  validFrom     DateTime? @map("valid_from")
+  validUntil    DateTime? @map("valid_until")
+  isPinned      Boolean   @default(false) @map("is_pinned")
+  createdBy     String    @map("created_by") @db.Uuid
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  creator User @relation("NoticeBoardCreator", fields: [createdBy], references: [id])
+
+  @@map("notice_board_items")
+}
+
+model ApprovalChain {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowCode String   @map("workflow_code")
+  name         String
+  description  String?
+  isActive     Boolean  @default(true) @map("is_active")
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  steps ApprovalChainStep[]
+
+  @@unique([workflowCode, version])
+  @@map("approval_chains")
+}
+
+model ApprovalChainStep {
+  id                   String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  approvalChainId      String       @map("approval_chain_id") @db.Uuid
+  level                Int
+  approverType         ApproverType @map("approver_type")
+  approverRole         String?      @map("approver_role")
+  approverUserId       String?      @map("approver_user_id") @db.Uuid
+  condition            Json?
+  isMandatory          Boolean      @default(true) @map("is_mandatory")
+  escalationAfterHours Int?         @map("escalation_after_hours")
+  escalateToRole       String?      @map("escalate_to_role")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  chain ApprovalChain @relation(fields: [approvalChainId], references: [id], onDelete: Cascade)
+
+  @@index([approvalChainId, level])
+  @@map("approval_chain_steps")
+}
+
+model ReminderSchedule {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reminderCode        String   @unique @map("reminder_code")
+  name                String
+  targetEvent         String   @map("target_event")
+  offsetDays          Int      @map("offset_days")
+  repeatIntervalDays  Int?     @map("repeat_interval_days")
+  maxRepeats          Int?     @map("max_repeats")
+  channels            String[]
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("reminder_schedules")
+}
+
+model SocketSession {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  socketId       String    @map("socket_id")
+  connectedAt    DateTime  @default(now()) @map("connected_at")
+  disconnectedAt DateTime? @map("disconnected_at")
+  userAgent      String?   @map("user_agent")
+  ipAddress      String?   @map("ip_address")
+  rooms          String[]  @default([])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([socketId])
+  @@map("socket_sessions")
+}

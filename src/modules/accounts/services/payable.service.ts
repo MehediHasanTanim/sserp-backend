@@ -30,7 +30,9 @@ export class PayableService {
     });
     const buckets = { current: 0, days31_60: 0, days61_90: 0, over90: 0 };
     for (const row of open) {
-      const days = Math.floor((asOf.getTime() - row.dueDate.getTime()) / 86400000);
+      const days = Math.floor(
+        (asOf.getTime() - row.dueDate.getTime()) / 86400000,
+      );
       const amt = row.outstandingAmount;
       if (days <= 30) buckets.current += amt;
       else if (days <= 60) buckets.days31_60 += amt;
@@ -49,7 +51,12 @@ export class PayableService {
   }
 
   /** Creates a draft bank payment voucher for the outstanding amount. */
-  async pay(id: string, userId: string, bankAccountId: string, costCenter: string) {
+  async pay(
+    id: string,
+    userId: string,
+    bankAccountId: string,
+    costCenter: string,
+  ) {
     const row = await this.findById(id);
     if (row.outstandingAmount <= 0) {
       throw DomainException.conflict('Nothing outstanding to pay');

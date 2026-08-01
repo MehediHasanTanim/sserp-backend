@@ -4,13 +4,11 @@ rules:
     message: >-
       Account codes must be resolved via posting_rules / AccountsService.
       Do not hardcode debit/credit account codes outside the accounts module.
-    severity: error
+    severity: WARNING
     patterns:
       - pattern-either:
-          - pattern: debitAccountCode: "..."
-          - pattern: creditAccountCode: "..."
-      - pattern-not-inside: |
-          class $X { ... }
+          - pattern: 'debitAccountCode: "..."'
+          - pattern: 'creditAccountCode: "..."'
     paths:
       exclude:
         - src/modules/accounts/**

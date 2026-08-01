@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   EmployeeDocumentType,
   ExitType,
@@ -7,6 +8,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { DomainException } from '../../../shared/errors/domain-exception';
+import { EventNames } from '../../../shared/events/event-names';
 
 export interface TransferInput {
   department?: HrDepartment;
@@ -47,7 +49,10 @@ export interface CreateContractInput {
  */
 @Injectable()
 export class EmployeeLifecycleService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   private async requireEmployee(
     id: string,
@@ -141,7 +146,7 @@ export class EmployeeLifecycleService {
   }
 
   async exit(id: string, input: ExitInput, actorId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const employee = await this.requireEmployee(id, tx);
       const existingExit = await tx.employeeExit.findUnique({
         where: { employeeId: id },
@@ -180,6 +185,15 @@ export class EmployeeLifecycleService {
       });
       return { exit, employee: updated };
     });
+
+    await this.events.emitAsync(EventNames.EMPLOYEE_EXIT_INITIATED, {
+      employeeId: id,
+      exitId: result.exit.id,
+      exitType: input.exitType,
+      lastWorkingDay: input.lastWorkingDay,
+      actorId,
+    });
+    return result;
   }
 
   async history(employeeId: string) {

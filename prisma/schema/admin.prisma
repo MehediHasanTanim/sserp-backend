@@ -21,6 +21,39 @@ model OrganizationSettings {
   dividendWithholdingTaxPercent Int @default(10) @map("dividend_withholding_tax_percent")
   defaultBudgetEnforcementMode String @default("warn") @map("default_budget_enforcement_mode")
   bankMatchDateWindowDays   Int      @default(3) @map("bank_match_date_window_days")
+  gratuityLwpExclusionThresholdDays Int @default(30) @map("gratuity_lwp_exclusion_threshold_days")
+  payrollDefaultWorkingDays Int      @default(22) @map("payroll_default_working_days")
+  encashmentPerDayDivisor   Int      @default(30) @map("encashment_per_day_divisor")
+  bankTransferFileFormat    BankTransferFileFormat @default(csv) @map("bank_transfer_file_format")
+  poApprovalThreshold       Int      @default(5000000) @map("po_approval_threshold")
+  invoiceVarianceTolerancePercent Int @default(2) @map("invoice_variance_tolerance_percent")
+  grnOverDeliveryTolerancePercent Int @default(0) @map("grn_over_delivery_tolerance_percent")
+  autoPrOnLowStockEnabled   Boolean  @default(false) @map("auto_pr_on_low_stock_enabled")
+  defaultValuationMethod    ValuationMethod @default(weighted_average) @map("default_valuation_method")
+  reportSyncTimeoutMs       Int      @default(5000) @map("report_sync_timeout_ms")
+  exportMaxRows             Int      @default(200000) @map("export_max_rows")
+  exportRetentionHours      Int      @default(24) @map("export_retention_hours")
+  dashboardCacheTtlSeconds  Int      @default(600) @map("dashboard_cache_ttl_seconds")
+  notificationQuietHoursDefaultStart String? @map("notification_quiet_hours_default_start")
+  notificationQuietHoursDefaultEnd   String? @map("notification_quiet_hours_default_end")
+  messageEditWindowMinutes           Int     @default(15) @map("message_edit_window_minutes")
+  notificationDedupWindowSeconds     Int     @default(300) @map("notification_dedup_window_seconds")
+  smsEnabled                         Boolean @default(true) @map("sms_enabled")
+  emailEnabled                       Boolean @default(true) @map("email_enabled")
+  /// Optional CIDR/IP allow list for super_admin routes (JSON string array).
+  superAdminIpAllowlist              Json?   @map("super_admin_ip_allowlist")
+  /// Comma-separated roles that require 2FA when logging in.
+  twoFactorRequiredRoles             Json    @default("[\"super_admin\"]") @map("two_factor_required_roles")
+  featureBiometricEnabled            Boolean @default(false) @map("feature_biometric_enabled")
+  featurePaymentGatewayEnabled       Boolean @default(false) @map("feature_payment_gateway_enabled")
+  /// Null = password expiry disabled.
+  passwordMaxAgeDays                 Int?    @map("password_max_age_days")
+  /// Minor units deducted per minute late after grace (0 = off).
+  latePenaltyPerMinute               Int     @default(0) @map("late_penalty_per_minute")
+  /// Minor units deducted per minute early leave after grace (0 = off).
+  earlyLeavePenaltyPerMinute         Int     @default(0) @map("early_leave_penalty_per_minute")
+  /// Consecutive late days before anomaly alert (0 = off).
+  attendanceAnomalyLateStreakDays    Int     @default(0) @map("attendance_anomaly_late_streak_days")
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
 

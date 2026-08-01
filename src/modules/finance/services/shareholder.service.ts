@@ -107,11 +107,13 @@ export class ShareholderService {
     return this.prisma.$transaction(async (tx) => {
       let toId = input.toShareholderId;
       if (!toId) {
-        if (!input.toName) throw DomainException.validation('toName required for new entrant');
+        if (!input.toName)
+          throw DomainException.validation('toName required for new entrant');
         const created = await tx.shareholder.create({
           data: {
             name: input.toName,
-            shareholderType: input.newShareholder?.shareholderType ?? 'individual',
+            shareholderType:
+              input.newShareholder?.shareholderType ?? 'individual',
             sharePercentage: input.percentageTransferred,
             joinedDate: input.transferDate,
             contactPhone: input.newShareholder?.contactPhone,
@@ -126,7 +128,8 @@ export class ShareholderService {
         await tx.shareholder.update({
           where: { id: toId },
           data: {
-            sharePercentage: Number(to.sharePercentage) + input.percentageTransferred,
+            sharePercentage:
+              Number(to.sharePercentage) + input.percentageTransferred,
           },
         });
       }
@@ -134,7 +137,8 @@ export class ShareholderService {
       await tx.shareholder.update({
         where: { id: from.id },
         data: {
-          sharePercentage: Number(from.sharePercentage) - input.percentageTransferred,
+          sharePercentage:
+            Number(from.sharePercentage) - input.percentageTransferred,
         },
       });
 
@@ -195,7 +199,10 @@ export class ProfitAppropriationService {
     reserveAllocations: Array<{ reserveFundId: string; amount: number }>;
     createdBy: string;
   }) {
-    const reserveSum = data.reserveAllocations.reduce((s, r) => s + r.amount, 0);
+    const reserveSum = data.reserveAllocations.reduce(
+      (s, r) => s + r.amount,
+      0,
+    );
     const afterTax = data.netProfitAmount - data.taxProvisionAmount;
     if (reserveSum > afterTax) {
       throw DomainException.withCode(
@@ -210,7 +217,8 @@ export class ProfitAppropriationService {
         fiscalYear: data.fiscalYear,
         netProfitAmount: data.netProfitAmount,
         taxProvisionAmount: data.taxProvisionAmount,
-        reserveAllocations: data.reserveAllocations as unknown as Prisma.InputJsonValue,
+        reserveAllocations:
+          data.reserveAllocations as unknown as Prisma.InputJsonValue,
         distributableAmount: distributable,
         retainedAmount: 0,
         createdBy: data.createdBy,
@@ -220,7 +228,9 @@ export class ProfitAppropriationService {
   }
 
   async approve(id: string, approvedBy: string) {
-    const appr = await this.prisma.profitAppropriation.findUnique({ where: { id } });
+    const appr = await this.prisma.profitAppropriation.findUnique({
+      where: { id },
+    });
     if (!appr) throw DomainException.notFound('Appropriation not found');
     if (appr.status !== 'draft') throw DomainException.conflict('Not draft');
 
@@ -228,7 +238,9 @@ export class ProfitAppropriationService {
       where: { id },
       data: { status: 'approved', approvedBy },
     });
-    this.events.emit(EventNames.APPROPRIATION_APPROVED, { appropriationId: id });
+    this.events.emit(EventNames.APPROPRIATION_APPROVED, {
+      appropriationId: id,
+    });
     return updated;
   }
 
@@ -237,7 +249,9 @@ export class ProfitAppropriationService {
    * Rounding remainder allocated to largest shareholder.
    */
   async disburse(id: string) {
-    const appr = await this.prisma.profitAppropriation.findUnique({ where: { id } });
+    const appr = await this.prisma.profitAppropriation.findUnique({
+      where: { id },
+    });
     if (!appr) throw DomainException.notFound('Appropriation not found');
     if (appr.status !== 'approved') {
       throw DomainException.conflict('Appropriation must be approved');
@@ -366,9 +380,7 @@ export class DisbursementService {
 
   dividendRegister(fiscalYear?: string) {
     return this.prisma.profitDisbursement.findMany({
-      where: fiscalYear
-        ? { appropriation: { fiscalYear } }
-        : undefined,
+      where: fiscalYear ? { appropriation: { fiscalYear } } : undefined,
       include: { shareholder: true, appropriation: true },
       orderBy: { createdAt: 'desc' },
     });

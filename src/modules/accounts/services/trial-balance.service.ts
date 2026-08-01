@@ -23,8 +23,12 @@ export class TrialBalanceService {
         },
         _sum: { debitAmount: true, creditAmount: true },
       });
-      const debit = (agg._sum.debitAmount ?? 0) + (account.normalBalance === 'debit' ? account.openingBalance : 0);
-      const credit = (agg._sum.creditAmount ?? 0) + (account.normalBalance === 'credit' ? account.openingBalance : 0);
+      const debit =
+        (agg._sum.debitAmount ?? 0) +
+        (account.normalBalance === 'debit' ? account.openingBalance : 0);
+      const credit =
+        (agg._sum.creditAmount ?? 0) +
+        (account.normalBalance === 'credit' ? account.openingBalance : 0);
       const netDebit = Math.max(debit - credit, 0);
       const netCredit = Math.max(credit - debit, 0);
       if (netDebit === 0 && netCredit === 0) continue;
@@ -39,6 +43,12 @@ export class TrialBalanceService {
       });
     }
 
-    return { asOfDate, rows, totalDebit, totalCredit, balanced: totalDebit === totalCredit };
+    return {
+      asOfDate,
+      rows,
+      totalDebit,
+      totalCredit,
+      balanced: totalDebit === totalCredit,
+    };
   }
 }

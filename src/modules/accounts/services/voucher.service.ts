@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PartyType, VoucherType } from '@prisma/client';
 import { NumberingService } from '../../admin/services/organization.service';
-import { DomainException, ErrorCode } from '../../../shared/errors/domain-exception';
+import {
+  DomainException,
+  ErrorCode,
+} from '../../../shared/errors/domain-exception';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { AccountsService } from './accounts.service';
 
@@ -79,13 +82,20 @@ export class VoucherService {
           debitAccountCode: '',
           creditAccountCode: '',
           postingDate: voucher.voucherDate,
-          payload: { variant: voucher.voucherType, paymentMethod: voucher.voucherType },
+          payload: {
+            variant: voucher.voucherType,
+            paymentMethod: voucher.voucherType,
+          },
         },
         tx,
       );
       return tx.voucher.update({
         where: { id },
-        data: { status: 'posted', journalId: journal.id, approvedBy: approverId },
+        data: {
+          status: 'posted',
+          journalId: journal.id,
+          approvedBy: approverId,
+        },
         include: { journal: true },
       });
     });
@@ -94,9 +104,14 @@ export class VoucherService {
   async cancel(id: string) {
     const voucher = await this.findById(id);
     if (voucher.status === 'posted') {
-      throw DomainException.withCode(ErrorCode.VOUCHER_POSTED, 409, 'Posted voucher cannot be cancelled');
+      throw DomainException.withCode(
+        ErrorCode.VOUCHER_POSTED,
+        409,
+        'Posted voucher cannot be cancelled',
+      );
     }
-    if (voucher.status === 'cancelled') throw DomainException.conflict('Already cancelled');
+    if (voucher.status === 'cancelled')
+      throw DomainException.conflict('Already cancelled');
     return this.prisma.voucher.update({
       where: { id },
       data: { status: 'cancelled' },

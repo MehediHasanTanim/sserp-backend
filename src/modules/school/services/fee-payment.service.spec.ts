@@ -40,16 +40,20 @@ describe('FeePaymentService', () => {
 
     prisma = {
       feeInvoice: {
-        findUnique: jest.fn().mockImplementation(() => Promise.resolve({ ...invoiceStore })),
+        findUnique: jest
+          .fn()
+          .mockImplementation(() => Promise.resolve({ ...invoiceStore })),
         update: jest.fn().mockImplementation(({ data }) => {
           invoiceStore = { ...invoiceStore, ...data };
           return Promise.resolve({ ...invoiceStore });
         }),
       },
       feePayment: {
-        create: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({ id: `pay-${++receiptSeq}`, ...data }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) =>
+            Promise.resolve({ id: `pay-${++receiptSeq}`, ...data }),
+          ),
         findUnique: jest.fn(),
         update: jest.fn().mockImplementation(({ where, data }) => ({
           id: where.id,
@@ -61,14 +65,18 @@ describe('FeePaymentService', () => {
         })),
       },
       feeWaiver: {
-        create: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({ id: 'waiver1', ...data }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) =>
+            Promise.resolve({ id: 'waiver1', ...data }),
+          ),
       },
       $transaction: jest.fn((fn) => fn(prisma)),
     };
     numbering = {
-      nextCode: jest.fn().mockImplementation(() => Promise.resolve(`RCT-${++receiptSeq}`)),
+      nextCode: jest
+        .fn()
+        .mockImplementation(() => Promise.resolve(`RCT-${++receiptSeq}`)),
     };
     events = { emitAsync: jest.fn().mockResolvedValue(undefined) };
     ledger = { post: jest.fn().mockResolvedValue({ deferred: true }) };
@@ -82,12 +90,20 @@ describe('FeePaymentService', () => {
 
   describe('pay (F-05/F-06/F-07/F-08/F-11)', () => {
     it('a 300 + 200 partial sequence on a 500 invoice moves partially_paid then paid', async () => {
-      const first = await service.pay('inv1', { amount: 300, method: 'cash' }, 'actor1');
+      const first = await service.pay(
+        'inv1',
+        { amount: 300, method: 'cash' },
+        'actor1',
+      );
       expect(first.amount).toBe(300);
       expect(invoiceStore.status).toBe('partially_paid');
       expect(invoiceStore.outstandingAmount).toBe(200);
 
-      const second = await service.pay('inv1', { amount: 200, method: 'cash' }, 'actor1');
+      const second = await service.pay(
+        'inv1',
+        { amount: 200, method: 'cash' },
+        'actor1',
+      );
       expect(second.amount).toBe(200);
       expect(invoiceStore.status).toBe('paid');
       expect(invoiceStore.outstandingAmount).toBe(0);
@@ -121,15 +137,29 @@ describe('FeePaymentService', () => {
     });
 
     it('posts a balancing debit/credit ledger entry per payment method', async () => {
-      await service.pay('inv1', { amount: 100, method: 'bank_transfer' }, 'actor1');
+      await service.pay(
+        'inv1',
+        { amount: 100, method: 'bank_transfer' },
+        'actor1',
+      );
       expect(ledger.post).toHaveBeenCalledWith(
-        expect.objectContaining({ debitAccountCode: '1020', creditAccountCode: '1200' }),
+        expect.objectContaining({
+          debitAccountCode: '1020',
+          creditAccountCode: '1200',
+        }),
       );
     });
 
     it('allocates a unique receipt number via NumberingService', async () => {
-      const payment = await service.pay('inv1', { amount: 100, method: 'cash' }, 'actor1');
-      expect(numbering.nextCode).toHaveBeenCalledWith('receipt', expect.anything());
+      const payment = await service.pay(
+        'inv1',
+        { amount: 100, method: 'cash' },
+        'actor1',
+      );
+      expect(numbering.nextCode).toHaveBeenCalledWith(
+        'receipt',
+        expect.anything(),
+      );
       expect(payment.receiptNumber).toBeDefined();
     });
   });
@@ -184,13 +214,19 @@ describe('FeePaymentService', () => {
       expect(result.status).toBe('reversed');
       expect(prisma.feePayment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ status: 'reversed', reversalReason: 'bounced cheque' }),
+          data: expect.objectContaining({
+            status: 'reversed',
+            reversalReason: 'bounced cheque',
+          }),
         }),
       );
       expect(invoiceStore.outstandingAmount).toBe(500);
       expect(invoiceStore.paidAmount).toBe(0);
       expect(ledger.post).toHaveBeenCalledWith(
-        expect.objectContaining({ debitAccountCode: '1200', creditAccountCode: '1010' }),
+        expect.objectContaining({
+          debitAccountCode: '1200',
+          creditAccountCode: '1010',
+        }),
       );
       expect(events.emitAsync).toHaveBeenCalledWith(
         'fee.payment.reversed',
@@ -202,13 +238,17 @@ describe('FeePaymentService', () => {
   describe('waive (F-10)', () => {
     it('rejects a waiver from a non-principal role', async () => {
       await expect(
-        service.waive('inv1', { amount: 100, reason: 'hardship' }, 'actor1', ['accountant']),
+        service.waive('inv1', { amount: 100, reason: 'hardship' }, 'actor1', [
+          'accountant',
+        ]),
       ).rejects.toMatchObject({ statusCode: 403 });
     });
 
     it('rejects a waiver with no reason', async () => {
       await expect(
-        service.waive('inv1', { amount: 100, reason: '' }, 'actor1', ['principal']),
+        service.waive('inv1', { amount: 100, reason: '' }, 'actor1', [
+          'principal',
+        ]),
       ).rejects.toMatchObject({ statusCode: 400 });
     });
 
@@ -224,7 +264,10 @@ describe('FeePaymentService', () => {
       expect(invoiceStore.outstandingAmount).toBe(300);
       expect(invoiceStore.status).toBe('partially_paid');
       expect(ledger.post).toHaveBeenCalledWith(
-        expect.objectContaining({ debitAccountCode: '5090', creditAccountCode: '1200' }),
+        expect.objectContaining({
+          debitAccountCode: '5090',
+          creditAccountCode: '1200',
+        }),
       );
       expect(events.emitAsync).toHaveBeenCalledWith(
         'fee.invoice.waived',
@@ -245,7 +288,9 @@ describe('FeePaymentService', () => {
 
     it('rejects a waiver amount larger than the outstanding balance', async () => {
       await expect(
-        service.waive('inv1', { amount: 600, reason: 'x' }, 'principal1', ['principal']),
+        service.waive('inv1', { amount: 600, reason: 'x' }, 'principal1', [
+          'principal',
+        ]),
       ).rejects.toMatchObject({ statusCode: 400 });
     });
   });

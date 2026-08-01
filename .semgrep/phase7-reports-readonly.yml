@@ -1,0 +1,80 @@
+# RP-20 — report handlers/framework/renderers/dashboards must not mutate data.
+# Metadata writes (export jobs, schedules, templates, custom reports, MV refresh log)
+# live in jobs/ and services/ and are intentionally excluded.
+rules:
+  - id: phase7-reports-no-prisma-create
+    languages: [typescript]
+    message: >-
+      Report handlers and framework code must not create records (RP-20).
+      Metadata writes belong in jobs/ or services/.
+    severity: ERROR
+    pattern-either:
+      - pattern: $PRISMA.$MODEL.create(...)
+      - pattern: $PRISMA.$MODEL.createMany(...)
+    paths:
+      include:
+        - src/modules/reports/handlers/**
+        - src/modules/reports/framework/**
+        - src/modules/reports/dashboards/**
+        - src/modules/reports/renderers/**
+
+  - id: phase7-reports-no-prisma-update
+    languages: [typescript]
+    message: >-
+      Report handlers and framework code must not update records (RP-20).
+    severity: ERROR
+    pattern-either:
+      - pattern: $PRISMA.$MODEL.update(...)
+      - pattern: $PRISMA.$MODEL.updateMany(...)
+    paths:
+      include:
+        - src/modules/reports/handlers/**
+        - src/modules/reports/framework/**
+        - src/modules/reports/dashboards/**
+        - src/modules/reports/renderers/**
+
+  - id: phase7-reports-no-prisma-delete
+    languages: [typescript]
+    message: >-
+      Report handlers and framework code must not delete records (RP-20).
+    severity: ERROR
+    pattern-either:
+      - pattern: $PRISMA.$MODEL.delete(...)
+      - pattern: $PRISMA.$MODEL.deleteMany(...)
+    paths:
+      include:
+        - src/modules/reports/handlers/**
+        - src/modules/reports/framework/**
+        - src/modules/reports/dashboards/**
+        - src/modules/reports/renderers/**
+
+  - id: phase7-reports-no-prisma-upsert
+    languages: [typescript]
+    message: >-
+      Report handlers and framework code must not upsert records (RP-20).
+    severity: ERROR
+    pattern: $PRISMA.$MODEL.upsert(...)
+    paths:
+      include:
+        - src/modules/reports/handlers/**
+        - src/modules/reports/framework/**
+        - src/modules/reports/dashboards/**
+        - src/modules/reports/renderers/**
+
+  - id: phase7-reports-no-execute-raw-write
+    languages: [typescript]
+    message: >-
+      Report handlers must not run mutating raw SQL (RP-20).
+    severity: ERROR
+    pattern-either:
+      - pattern: $PRISMA.$executeRawUnsafe(...)
+      - pattern: $PRISMA.$executeRaw(`... INSERT ...`, ...)
+      - pattern: $PRISMA.$executeRaw(`... UPDATE ...`, ...)
+      - pattern: $PRISMA.$executeRaw(`... DELETE ...`, ...)
+      - pattern: $PRISMA.$executeRaw($SQL, ...)
+    paths:
+      include:
+        - src/modules/reports/handlers/**
+        - src/modules/reports/framework/**
+        - src/modules/reports/dashboards/**
+        - src/modules/reports/renderers/**

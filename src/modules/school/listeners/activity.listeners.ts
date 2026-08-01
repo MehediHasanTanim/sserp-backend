@@ -9,10 +9,7 @@ export class ActivityFeeListener {
   constructor(private readonly enrollments: ActivityEnrollmentService) {}
 
   @OnEvent(EventNames.ACTIVITY_OPTIN_CONFIRMED)
-  async onConfirmed(payload: {
-    activityId: string;
-    studentId: string;
-  }) {
+  async onConfirmed(payload: { activityId: string; studentId: string }) {
     await this.enrollments.generateInvoice(
       payload.activityId,
       payload.studentId,

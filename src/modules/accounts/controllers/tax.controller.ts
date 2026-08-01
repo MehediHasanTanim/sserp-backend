@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../../shared/decorators';
 import { TaxService, CreateTaxDto } from '../services/tax.service';
@@ -45,7 +53,9 @@ export class TaxController {
     return this.taxes.create({
       ...dto,
       effectiveFrom: new Date(dto.effectiveFrom as unknown as string),
-      effectiveTo: dto.effectiveTo ? new Date(dto.effectiveTo as unknown as string) : undefined,
+      effectiveTo: dto.effectiveTo
+        ? new Date(dto.effectiveTo as unknown as string)
+        : undefined,
     });
   }
 

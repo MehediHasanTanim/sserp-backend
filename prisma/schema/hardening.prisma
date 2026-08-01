@@ -1,0 +1,123 @@
+// Phase 9: Security hardening — encryption keys, offline sync, migration runs, health snapshots, audit chain
+
+enum EncryptionPurpose {
+  medical
+  financial
+}
+
+enum OfflineSyncEntityType {
+  student_attendance
+  session_note
+  group_attendance
+}
+
+enum OfflineSyncStatus {
+  accepted
+  partially_accepted
+  conflicted
+  rejected
+}
+
+enum DataMigrationStatus {
+  pending
+  dry_run
+  running
+  completed
+  failed
+}
+
+model EncryptionKey {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  keyVersion  Int               @map("key_version")
+  purpose     EncryptionPurpose
+  algorithm   String            @default("aes-256-gcm")
+  wrappedKey  String            @map("wrapped_key")
+  activatedAt DateTime          @default(now()) @map("activated_at")
+  retiredAt   DateTime?         @map("retired_at")
+  isCurrent   Boolean           @default(true) @map("is_current")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@unique([purpose, keyVersion])
+  @@index([purpose, isCurrent])
+  @@map("encryption_keys")
+}
+
+model DataMigrationRun {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  migrationName         String              @map("migration_name")
+  sourceDescription     String?             @map("source_description")
+  status                DataMigrationStatus @default(pending)
+  recordsRead           Int                 @default(0) @map("records_read")
+  recordsWritten        Int                 @default(0) @map("records_written")
+  recordsSkipped        Int                 @default(0) @map("records_skipped")
+  recordsFailed         Int                 @default(0) @map("records_failed")
+  errorReportObjectKey  String?             @map("error_report_object_key")
+  startedAt             DateTime?           @map("started_at")
+  completedAt           DateTime?           @map("completed_at")
+  runBy                 String?             @map("run_by") @db.Uuid
+  createdAt             DateTime            @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@map("data_migration_runs")
+}
+
+model OfflineSyncQueue {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientBatchId   String                @unique @map("client_batch_id")
+  userId          String                @map("user_id") @db.Uuid
+  entityType      OfflineSyncEntityType @map("entity_type")
+  payload         Json
+  clientTimestamp DateTime              @map("client_timestamp")
+  receivedAt      DateTime              @default(now()) @map("received_at")
+  status          OfflineSyncStatus     @default(accepted)
+  conflictReport  Json?                 @map("conflict_report")
+  result          Json?
+
+  @@index([userId, receivedAt])
+  @@map("offline_sync_queue")
+}
+
+model SystemHealthSnapshot {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  capturedAt       DateTime @default(now()) @map("captured_at")
+  dbSizeBytes      BigInt?  @map("db_size_bytes")
+  activeConnections Int?    @map("active_connections")
+  redisMemoryBytes BigInt?  @map("redis_memory_bytes")
+  minioUsageBytes  BigInt?  @map("minio_usage_bytes")
+  queueDepths      Json?    @map("queue_depths")
+  slowQueryCount   Int?     @map("slow_query_count")
+
+  @@index([capturedAt])
+  @@map("system_health_snapshots")
+}
+
+model AuditHashCheckpoint {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fromSeq       BigInt   @map("from_seq")
+  toSeq         BigInt   @map("to_seq")
+  chainHash     String   @map("chain_hash")
+  rowCount      Int      @map("row_count")
+  verifiedAt    DateTime @default(now()) @map("verified_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([toSeq])
+  @@map("audit_hash_checkpoints")
+}
+
+/// Portal / gateway payment intent — settled only via verified webhook (H-08).
+model PaymentGatewayIntent {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gatewayTxnId String    @unique @map("gateway_txn_id")
+  reference    String
+  invoiceId    String?   @map("invoice_id") @db.Uuid
+  amount       Int
+  currency     String    @default("BDT")
+  status       String    @default("pending")
+  createdBy    String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  settledAt    DateTime? @map("settled_at")
+
+  @@index([invoiceId])
+  @@index([status])
+  @@map("payment_gateway_intents")
+}

@@ -25,15 +25,22 @@ export class SessionCompletedListener {
   async handleSessionCompleted(payload: SessionCompletedPayload) {
     try {
       if (payload.patientId) {
-        await this.billing.generatePerSessionInvoice(payload.sessionId, payload.completedBy);
+        await this.billing.generatePerSessionInvoice(
+          payload.sessionId,
+          payload.completedBy,
+        );
       } else if (payload.groupId) {
         // For group: billing is per-patient per-attendance; handled via monthly consolidated job
         // Per BI-07: no group-level discount
-        this.logger.log(`Group session ${payload.sessionId} completed; billing deferred to monthly job`);
+        this.logger.log(
+          `Group session ${payload.sessionId} completed; billing deferred to monthly job`,
+        );
       }
     } catch (err: any) {
       // Log but don't block — invoice can be generated manually
-      this.logger.error(`Failed to auto-generate invoice for session ${payload.sessionId}: ${err.message}`);
+      this.logger.error(
+        `Failed to auto-generate invoice for session ${payload.sessionId}: ${err.message}`,
+      );
     }
   }
 }

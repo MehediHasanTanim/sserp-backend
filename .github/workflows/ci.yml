@@ -16,7 +16,14 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: npm run lint
-      - run: npm audit --audit-level=high || true
+      - run: npm run typecheck
+      - run: npm run check:no-retry
+      - run: npm run check:sensitive-fixtures
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm audit --audit-level=high
 
   stage2-unit:
     runs-on: ubuntu-latest
@@ -29,7 +36,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
-      - run: npm run test:unit -- --coverage
+      - run: npm run test:cov
+      - name: Upload coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: |
+            coverage/unit
+            reports/jest
+          retention-days: 30
+      - name: Codecov
+        continue-on-error: true
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/unit/lcov.info
+          fail_ci_if_error: false
 
   stage3-integration:
     runs-on: ubuntu-latest
@@ -87,8 +110,19 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npx prisma db seed
       - run: npm run test:integration
+      - name: OpenAPI route coverage
+        run: |
+          npm run openapi:export || true
+          npm run test:openapi-routes
+      - name: Upload route coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: route-coverage
+          path: reports/route-coverage
+          retention-days: 30
 
-  stage4-openapi:
+  stage4-openapi-semgrep:
     runs-on: ubuntu-latest
     needs: stage2-unit
     steps:
@@ -102,5 +136,65 @@ jobs:
       - run: |
           openssl genrsa -out keys/jwt-private.pem 2048
           openssl rsa -in keys/jwt-private.pem -pubout -out keys/jwt-public.pem
-      - name: Export OpenAPI (requires running deps skipped — generate from module metadata)
-        run: echo "OpenAPI check runs locally via npm run openapi:export"
+      - name: OpenAPI export + check
+        run: |
+          npm run openapi:export
+          npm run openapi:check
+      - name: Semgrep architectural rules
+        run: npm run semgrep
+      - name: Traceability coverage
+        run: npm run test:traceability
+      - name: Report coverage parity
+        run: npm run test:report-coverage
+      - name: Snyk
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then echo "SNYK_TOKEN not set — skip"; exit 0; fi
+          npm install -g snyk
+          snyk test --severity-threshold=high
+
+  stage5-security-images:
+    runs-on: ubuntu-latest
+    needs: stage2-unit
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t sserp-api:ci .
+      - name: Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: sserp-api:ci
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  stage6-zap:
+    runs-on: ubuntu-latest
+    needs: stage3-integration
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start test stack
+        run: |
+          openssl genrsa -out keys/jwt-private.pem 2048
+          openssl rsa -in keys/jwt-private.pem -pubout -out keys/jwt-public.pem
+          docker compose -f docker/docker-compose.test.yml up -d --wait || docker compose -f docker/docker-compose.test.yml up -d
+          sleep 40
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:8031'
+          rules_file_name: '.zap/rules.tsv'
+          fail_action: true
+          cmd_options: '-a'
+        continue-on-error: true
+      - name: Upload ZAP Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: report_html.html
+          retention-days: 90
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.test.yml down -v || true

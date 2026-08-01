@@ -30,11 +30,25 @@ describe('BudgetCheckService', () => {
     prisma.budget.findFirst.mockResolvedValue({
       id: 'b1',
       enforcementMode: 'block',
-      lines: [{ id: 'bl1', periodMonth: null, allocatedAmount: 1000, revisedAmount: null }],
+      lines: [
+        {
+          id: 'bl1',
+          periodMonth: null,
+          allocatedAmount: 1000,
+          revisedAmount: null,
+        },
+      ],
     });
     await expect(
       service.checkExpenseLines(
-        [{ accountId: 'exp1', debitAmount: 50, creditAmount: 0, costCenter: 'admin' }],
+        [
+          {
+            accountId: 'exp1',
+            debitAmount: 50,
+            creditAmount: 0,
+            costCenter: 'admin',
+          },
+        ],
         new Date('2026-07-15'),
       ),
     ).resolves.toBeUndefined();
@@ -44,12 +58,28 @@ describe('BudgetCheckService', () => {
     prisma.budget.findFirst.mockResolvedValue({
       id: 'b1',
       enforcementMode: 'block',
-      lines: [{ id: 'bl1', periodMonth: null, allocatedAmount: 1000, revisedAmount: null }],
+      lines: [
+        {
+          id: 'bl1',
+          periodMonth: null,
+          allocatedAmount: 1000,
+          revisedAmount: null,
+        },
+      ],
     });
-    prisma.budgetConsumption.aggregate.mockResolvedValue({ _sum: { amount: 1000 } });
+    prisma.budgetConsumption.aggregate.mockResolvedValue({
+      _sum: { amount: 1000 },
+    });
     await expect(
       service.checkExpenseLines(
-        [{ accountId: 'exp1', debitAmount: 1, creditAmount: 0, costCenter: 'admin' }],
+        [
+          {
+            accountId: 'exp1',
+            debitAmount: 1,
+            creditAmount: 0,
+            costCenter: 'admin',
+          },
+        ],
         new Date('2026-07-15'),
       ),
     ).rejects.toMatchObject({ code: ErrorCode.BUDGET_EXCEEDED });
@@ -59,11 +89,27 @@ describe('BudgetCheckService', () => {
     prisma.budget.findFirst.mockResolvedValue({
       id: 'b1',
       enforcementMode: 'warn',
-      lines: [{ id: 'bl1', periodMonth: null, allocatedAmount: 1000, revisedAmount: null }],
+      lines: [
+        {
+          id: 'bl1',
+          periodMonth: null,
+          allocatedAmount: 1000,
+          revisedAmount: null,
+        },
+      ],
     });
-    prisma.budgetConsumption.aggregate.mockResolvedValue({ _sum: { amount: 1000 } });
+    prisma.budgetConsumption.aggregate.mockResolvedValue({
+      _sum: { amount: 1000 },
+    });
     await service.checkExpenseLines(
-      [{ accountId: 'exp1', debitAmount: 1, creditAmount: 0, costCenter: 'admin' }],
+      [
+        {
+          accountId: 'exp1',
+          debitAmount: 1,
+          creditAmount: 0,
+          costCenter: 'admin',
+        },
+      ],
       new Date('2026-07-15'),
     );
     expect(events.emit).toHaveBeenCalled();
@@ -73,12 +119,28 @@ describe('BudgetCheckService', () => {
     prisma.budget.findFirst.mockResolvedValue({
       id: 'b1',
       enforcementMode: 'block',
-      lines: [{ id: 'bl1', periodMonth: null, allocatedAmount: 1000, revisedAmount: null }],
+      lines: [
+        {
+          id: 'bl1',
+          periodMonth: null,
+          allocatedAmount: 1000,
+          revisedAmount: null,
+        },
+      ],
     });
-    prisma.budgetConsumption.aggregate.mockResolvedValue({ _sum: { amount: 1000 } });
+    prisma.budgetConsumption.aggregate.mockResolvedValue({
+      _sum: { amount: 1000 },
+    });
     await expect(
       service.checkExpenseLines(
-        [{ accountId: 'exp1', debitAmount: 1, creditAmount: 0, costCenter: 'admin' }],
+        [
+          {
+            accountId: 'exp1',
+            debitAmount: 1,
+            creditAmount: 0,
+            costCenter: 'admin',
+          },
+        ],
         new Date('2026-07-15'),
         { overrideReason: 'Principal approved overage for emergency' },
       ),
@@ -89,7 +151,14 @@ describe('BudgetCheckService', () => {
     prisma.budget.findFirst.mockResolvedValue(null);
     await expect(
       service.checkExpenseLines(
-        [{ accountId: 'exp1', debitAmount: 5000, creditAmount: 0, costCenter: 'admin' }],
+        [
+          {
+            accountId: 'exp1',
+            debitAmount: 5000,
+            creditAmount: 0,
+            costCenter: 'admin',
+          },
+        ],
         new Date('2026-07-15'),
       ),
     ).resolves.toBeUndefined();

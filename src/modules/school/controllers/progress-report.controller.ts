@@ -76,10 +76,7 @@ export class ProgressReportController {
   @Roles('coordinator', 'teacher')
   @Permissions('school:create')
   @Audit({ module: 'school', entity: 'progress_report', action: 'create' })
-  create(
-    @Param('id') studentId: string,
-    @Body() dto: CreateProgressReportDto,
-  ) {
+  create(@Param('id') studentId: string, @Body() dto: CreateProgressReportDto) {
     return this.reports.create(studentId, dto);
   }
 
@@ -137,7 +134,11 @@ export class ProgressReportController {
   @Post('progress-reports/:id/evidence')
   @Roles('coordinator', 'teacher')
   @Permissions('school:update')
-  @Audit({ module: 'school', entity: 'progress_report', action: 'add_evidence' })
+  @Audit({
+    module: 'school',
+    entity: 'progress_report',
+    action: 'add_evidence',
+  })
   addEvidence(
     @Param('id') id: string,
     @Body() dto: AddProgressReportEvidenceDto,

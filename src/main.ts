@@ -25,8 +25,26 @@ async function bootstrap() {
 
   app.use(
     helmet({
-      contentSecurityPolicy: false,
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          connectSrc: [
+            "'self'",
+            ...(config.get<string[]>('corsOrigins') ?? []),
+          ],
+          frameAncestors: ["'none'"],
+        },
+      },
       crossOriginEmbedderPolicy: false,
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      hsts:
+        config.get('nodeEnv') === 'production'
+          ? { maxAge: 31536000, includeSubDomains: true }
+          : false,
     }),
   );
   app.use(cookieParser());
@@ -58,15 +76,11 @@ async function bootstrap() {
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Referrer-Policy', 'no-referrer');
-    if (config.get('nodeEnv') === 'production') {
-      res.setHeader(
-        'Strict-Transport-Security',
-        'max-age=31536000; includeSubDomains',
-      );
-    }
     next();
   });
+
+  // Graceful shutdown drain
+  app.enableShutdownHooks();
 
   const port = config.get<number>('port') ?? 3000;
   await app.listen(port);

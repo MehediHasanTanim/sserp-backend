@@ -63,7 +63,9 @@ export class ReceivableService {
     });
     const buckets = { current: 0, days31_60: 0, days61_90: 0, over90: 0 };
     for (const row of open) {
-      const days = Math.floor((asOf.getTime() - row.dueDate.getTime()) / 86400000);
+      const days = Math.floor(
+        (asOf.getTime() - row.dueDate.getTime()) / 86400000,
+      );
       const amt = row.outstandingAmount;
       if (days <= 30) buckets.current += amt;
       else if (days <= 60) buckets.days31_60 += amt;
@@ -73,11 +75,20 @@ export class ReceivableService {
     return { asOf, buckets, count: open.length };
   }
 
-  async settle(partyType: PartyType, partyId: string, amount: number, targetInvoiceId?: string) {
+  async settle(
+    partyType: PartyType,
+    partyId: string,
+    amount: number,
+    targetInvoiceId?: string,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       let remaining = amount;
       const rows = targetInvoiceId
-        ? [await tx.arLedger.findUniqueOrThrow({ where: { id: targetInvoiceId } })]
+        ? [
+            await tx.arLedger.findUniqueOrThrow({
+              where: { id: targetInvoiceId },
+            }),
+          ]
         : await tx.arLedger.findMany({
             where: {
               partyType,
@@ -96,7 +107,11 @@ export class ReceivableService {
           newOutstanding === 0 ? 'settled' : 'partially_settled';
         await tx.arLedger.update({
           where: { id: row.id },
-          data: { settledAmount: newSettled, outstandingAmount: newOutstanding, status },
+          data: {
+            settledAmount: newSettled,
+            outstandingAmount: newOutstanding,
+            status,
+          },
         });
         remaining -= apply;
         settled.push(row.id);
@@ -127,11 +142,18 @@ export class ReceivableService {
       });
       await tx.arLedger.update({
         where: { id },
-        data: { status: 'written_off', outstandingAmount: 0, settledAmount: row.grossAmount },
+        data: {
+          status: 'written_off',
+          outstandingAmount: 0,
+          settledAmount: row.grossAmount,
+        },
       });
       return note;
     });
-    this.events.emit(EventNames.RECEIVABLE_WRITTEN_OFF, { arLedgerId: id, noteId: result.id });
+    this.events.emit(EventNames.RECEIVABLE_WRITTEN_OFF, {
+      arLedgerId: id,
+      noteId: result.id,
+    });
     return result;
   }
 

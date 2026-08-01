@@ -95,7 +95,11 @@ export class GroupService {
       });
       if (!group) throw DomainException.notFound('Group not found');
       if (group.status === 'closed') {
-        throw new DomainException(ErrorCode.GROUP_CLOSED, 422, 'Group is closed');
+        throw new DomainException(
+          ErrorCode.GROUP_CLOSED,
+          422,
+          'Group is closed',
+        );
       }
 
       const activeCount = await tx.groupMembership.count({
@@ -104,10 +108,18 @@ export class GroupService {
 
       // Check if already enrolled
       const existing = await tx.groupMembership.findFirst({
-        where: { groupId: dto.groupId, patientId: dto.patientId, state: { in: ['active', 'waitlisted'] } },
+        where: {
+          groupId: dto.groupId,
+          patientId: dto.patientId,
+          state: { in: ['active', 'waitlisted'] },
+        },
       });
       if (existing) {
-        throw new DomainException(ErrorCode.ALREADY_ENROLLED, 409, 'Patient is already enrolled or waitlisted in this group');
+        throw new DomainException(
+          ErrorCode.ALREADY_ENROLLED,
+          409,
+          'Patient is already enrolled or waitlisted in this group',
+        );
       }
 
       if (activeCount >= group.maxCapacity) {
@@ -133,7 +145,11 @@ export class GroupService {
           data: {
             groupId: dto.groupId,
             changeType: 'membership_added',
-            detail: { patientId: dto.patientId, state: 'waitlisted', position } as any,
+            detail: {
+              patientId: dto.patientId,
+              state: 'waitlisted',
+              position,
+            } as any,
             effectiveDate: dto.enrollmentDate,
             changedBy: enrolledBy,
           },
@@ -180,12 +196,21 @@ export class GroupService {
     });
   }
 
-  async exitMember(groupId: string, patientId: string, exitReason: string, exitedBy: string) {
+  async exitMember(
+    groupId: string,
+    patientId: string,
+    exitReason: string,
+    exitedBy: string,
+  ) {
     const membership = await this.prisma.groupMembership.findFirst({
       where: { groupId, patientId, state: 'active' },
     });
     if (!membership) {
-      throw new DomainException(ErrorCode.NOT_ENROLLED, 404, 'Patient is not an active member of this group');
+      throw new DomainException(
+        ErrorCode.NOT_ENROLLED,
+        404,
+        'Patient is not an active member of this group',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -223,7 +248,11 @@ export class GroupService {
       });
     });
 
-    this.events.emit(EventNames.GROUP_MEMBERSHIP_EXITED, { groupId, patientId, exitedBy });
+    this.events.emit(EventNames.GROUP_MEMBERSHIP_EXITED, {
+      groupId,
+      patientId,
+      exitedBy,
+    });
   }
 
   async markGroupAttendance(dto: MarkGroupAttendanceDto, markedBy: string) {
@@ -231,12 +260,18 @@ export class GroupService {
       where: { id: dto.sessionId },
     });
     if (!session) throw DomainException.notFound('Session not found');
-    if (session.sessionMode !== 'group') throw DomainException.validation('Session is not a group session');
+    if (session.sessionMode !== 'group')
+      throw DomainException.validation('Session is not a group session');
 
     const results = await this.prisma.$transaction(
       dto.attendances.map((a) =>
         this.prisma.groupSessionAttendance.upsert({
-          where: { sessionId_patientId: { sessionId: dto.sessionId, patientId: a.patientId } },
+          where: {
+            sessionId_patientId: {
+              sessionId: dto.sessionId,
+              patientId: a.patientId,
+            },
+          },
           create: {
             sessionId: dto.sessionId,
             patientId: a.patientId,
@@ -255,9 +290,13 @@ export class GroupService {
       ),
     );
 
-    const presentCount = dto.attendances.filter((a) => a.status === 'present' || a.status === 'late').length;
+    const presentCount = dto.attendances.filter(
+      (a) => a.status === 'present' || a.status === 'late',
+    ).length;
     if (presentCount < MIN_ATTENDANCE_WARNING) {
-      this.logger.warn(`Group session ${dto.sessionId} has low attendance: ${presentCount}`);
+      this.logger.warn(
+        `Group session ${dto.sessionId} has low attendance: ${presentCount}`,
+      );
     }
 
     return results;
@@ -265,7 +304,8 @@ export class GroupService {
 
   async close(groupId: string, closeReason: string, closedBy: string) {
     const group = await this.findById(groupId);
-    if (group.status === 'closed') throw DomainException.conflict('Group is already closed');
+    if (group.status === 'closed')
+      throw DomainException.conflict('Group is already closed');
 
     await this.prisma.$transaction(async (tx) => {
       await tx.therapyGroup.update({

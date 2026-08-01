@@ -9,7 +9,10 @@ import {
 } from '../../../shared/decorators';
 import { FeeInvoiceService } from '../services/fee-invoice.service';
 import { FeeReminderService } from '../services/fee-reminder.service';
-import { CancelInvoiceDto, GenerateMonthlyInvoicesDto } from '../dto/fee-invoice.dto';
+import {
+  CancelInvoiceDto,
+  GenerateMonthlyInvoicesDto,
+} from '../dto/fee-invoice.dto';
 
 @ApiTags('school')
 @ApiBearerAuth()
@@ -23,7 +26,11 @@ export class FeeInvoiceController {
   @Post('fee-invoices/generate-monthly')
   @Roles('accountant', 'super_admin')
   @Permissions('school:create')
-  @Audit({ module: 'school', entity: 'fee_invoice', action: 'generate_monthly' })
+  @Audit({
+    module: 'school',
+    entity: 'fee_invoice',
+    action: 'generate_monthly',
+  })
   @ApiOperation({ summary: 'Idempotent bulk generation for a month' })
   generateMonthly(
     @Body() dto: GenerateMonthlyInvoicesDto,
@@ -33,7 +40,13 @@ export class FeeInvoiceController {
   }
 
   @Get('fee-invoices')
-  @Roles('accountant', 'coordinator', 'receptionist', 'principal', 'super_admin')
+  @Roles(
+    'accountant',
+    'coordinator',
+    'receptionist',
+    'principal',
+    'super_admin',
+  )
   @Permissions('school:read')
   list(
     @Query('studentId') studentId?: string,
@@ -43,7 +56,14 @@ export class FeeInvoiceController {
   }
 
   @Get('fee-invoices/:id')
-  @Roles('accountant', 'coordinator', 'receptionist', 'principal', 'super_admin', 'parent')
+  @Roles(
+    'accountant',
+    'coordinator',
+    'receptionist',
+    'principal',
+    'super_admin',
+    'parent',
+  )
   @Permissions('school:read')
   get(@Param('id') id: string) {
     return this.invoices.get(id);
@@ -58,7 +78,14 @@ export class FeeInvoiceController {
   }
 
   @Get('students/:id/fee-summary')
-  @Roles('accountant', 'coordinator', 'receptionist', 'principal', 'super_admin', 'parent')
+  @Roles(
+    'accountant',
+    'coordinator',
+    'receptionist',
+    'principal',
+    'super_admin',
+    'parent',
+  )
   @Permissions('school:read')
   feeSummary(@Param('id') studentId: string) {
     return this.invoices.feeSummary(studentId);

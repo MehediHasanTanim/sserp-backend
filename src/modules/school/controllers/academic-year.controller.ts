@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
 import { Roles, Permissions, Audit } from '../../../shared/decorators';
 import { AcademicYearService } from '../services/academic-year.service';
 import {
@@ -7,6 +8,13 @@ import {
   CreateAcademicYearDto,
   UpdateAcademicYearDto,
 } from '../dto/academic-year.dto';
+
+class CarryForwardDto {
+  @IsUUID() targetYearId!: string;
+  @IsOptional() @IsUUID() shiftId?: string;
+  @IsOptional() @IsString() enrollmentDate?: string;
+  @IsOptional() @IsBoolean() dryRun?: boolean;
+}
 
 @ApiTags('school')
 @ApiBearerAuth()
@@ -56,6 +64,21 @@ export class AcademicYearController {
   @ApiOperation({ summary: 'Mark exactly one academic year as current' })
   setCurrent(@Param('id') id: string) {
     return this.academicYears.setCurrent(id);
+  }
+
+  @Post(':id/carry-forward')
+  @Roles('super_admin', 'principal', 'coordinator')
+  @Permissions('school:update')
+  @Audit({
+    module: 'school',
+    entity: 'academic_year',
+    action: 'carry_forward',
+  })
+  @ApiOperation({
+    summary: 'Bulk re-enroll active students into another academic year',
+  })
+  carryForward(@Param('id') id: string, @Body() dto: CarryForwardDto) {
+    return this.academicYears.carryForward(id, dto);
   }
 
   @Get(':id/terms')

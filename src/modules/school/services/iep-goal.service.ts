@@ -142,7 +142,8 @@ export class IepGoalService {
       ? undefined
       : await this.resolveTeacherId(actor.id);
     const isResponsibleTeacher =
-      !!goal.responsibleTeacherId && goal.responsibleTeacherId === actorTeacherId;
+      !!goal.responsibleTeacherId &&
+      goal.responsibleTeacherId === actorTeacherId;
     if (!isCoordinator && !isResponsibleTeacher) {
       throw DomainException.forbidden(
         'Only the responsible teacher or a coordinator may record goal progress',

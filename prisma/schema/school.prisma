@@ -70,6 +70,7 @@ model Student {
   nationality             String?
   religion                String?
   disabilityCategory      String?       @map("disability_category")
+  disabilityCategoryHash  String?       @map("disability_category_hash")
   severityLevel           String?       @map("severity_level")
   bloodGroup              String?       @map("blood_group")
   photoAttachmentId       String?       @map("photo_attachment_id") @db.Uuid
@@ -119,6 +120,7 @@ model Student {
   @@index([status])
   @@index([shiftId])
   @@index([academicYearId, status])
+  @@index([disabilityCategoryHash])
   @@map("students")
 }
 

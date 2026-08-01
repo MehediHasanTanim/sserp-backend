@@ -100,10 +100,7 @@ export class IepController {
   @Roles('coordinator', 'teacher')
   @Permissions('school:update')
   @Audit({ module: 'school', entity: 'iep_goal', action: 'update' })
-  updateGoal(
-    @Param('goalId') goalId: string,
-    @Body() dto: UpdateIepGoalDto,
-  ) {
+  updateGoal(@Param('goalId') goalId: string, @Body() dto: UpdateIepGoalDto) {
     return this.goals.update(goalId, dto);
   }
 

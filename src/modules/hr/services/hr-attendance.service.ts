@@ -88,15 +88,12 @@ export class HrAttendanceService {
     return { items, page, pageSize, total };
   }
 
-  /** Computes minutes late relative to the employee's active shift, if any. */
-  private async computeLateMinutes(
+  private async loadShiftAssignment(
     tx: TxClient | PrismaService,
     employeeId: string,
     attendanceDate: Date,
-    checkIn: Date | undefined,
-  ): Promise<number> {
-    if (!checkIn) return 0;
-    const assignment = await tx.employeeShiftAssignment.findFirst({
+  ) {
+    return tx.employeeShiftAssignment.findFirst({
       where: {
         employeeId,
         effectiveFrom: { lte: attendanceDate },
@@ -105,6 +102,21 @@ export class HrAttendanceService {
       include: { hrShift: true },
       orderBy: { effectiveFrom: 'desc' },
     });
+  }
+
+  /** Computes minutes late relative to the employee's active shift, if any. */
+  private async computeLateMinutes(
+    tx: TxClient | PrismaService,
+    employeeId: string,
+    attendanceDate: Date,
+    checkIn: Date | undefined,
+  ): Promise<number> {
+    if (!checkIn) return 0;
+    const assignment = await this.loadShiftAssignment(
+      tx,
+      employeeId,
+      attendanceDate,
+    );
     if (!assignment) return 0;
 
     const tz = this.orgClock.getTimezone();
@@ -120,6 +132,59 @@ export class HrAttendanceService {
     return rawLate;
   }
 
+  private async computeEarlyLeaveMinutes(
+    tx: TxClient | PrismaService,
+    employeeId: string,
+    attendanceDate: Date,
+    checkOut: Date | undefined,
+  ): Promise<number> {
+    if (!checkOut) return 0;
+    const assignment = await this.loadShiftAssignment(
+      tx,
+      employeeId,
+      attendanceDate,
+    );
+    if (!assignment) return 0;
+
+    const tz = this.orgClock.getTimezone();
+    const [outHour, outMinute] = formatInTimeZone(checkOut, tz, 'HH:mm')
+      .split(':')
+      .map(Number);
+    const shiftEnd = assignment.hrShift.endTime;
+    const shiftEndMinutes =
+      shiftEnd.getUTCHours() * 60 + shiftEnd.getUTCMinutes();
+    const outMinutes = outHour * 60 + outMinute;
+    const rawEarly = shiftEndMinutes - outMinutes;
+    if (rawEarly <= assignment.hrShift.graceMinutes) return 0;
+    return Math.max(0, rawEarly);
+  }
+
+  /** Pure helper for unit tests — penalty after grace is already in minute inputs. */
+  static computePenaltyAmount(input: {
+    lateMinutes: number;
+    earlyLeaveMinutes: number;
+    latePenaltyPerMinute: number;
+    earlyLeavePenaltyPerMinute: number;
+  }): number {
+    const late =
+      input.latePenaltyPerMinute > 0
+        ? input.lateMinutes * input.latePenaltyPerMinute
+        : 0;
+    const early =
+      input.earlyLeavePenaltyPerMinute > 0
+        ? input.earlyLeaveMinutes * input.earlyLeavePenaltyPerMinute
+        : 0;
+    return late + early;
+  }
+
+  private async resolvePenaltySettings(tx: TxClient | PrismaService) {
+    const org = await tx.organizationSettings.findFirst();
+    return {
+      latePenaltyPerMinute: org?.latePenaltyPerMinute ?? 0,
+      earlyLeavePenaltyPerMinute: org?.earlyLeavePenaltyPerMinute ?? 0,
+    };
+  }
+
   async bulkSubmit(items: BulkAttendanceItemInput[], markedBy: string) {
     const absences: Array<{ id: string; employeeId: string; date: string }> =
       [];
@@ -130,6 +195,7 @@ export class HrAttendanceService {
     }> = [];
 
     await this.prisma.$transaction(async (tx) => {
+      const penaltySettings = await this.resolvePenaltySettings(tx);
       for (const item of items) {
         const attendanceDate = new Date(item.attendanceDate);
         const checkIn = item.checkIn ? new Date(item.checkIn) : undefined;
@@ -150,6 +216,17 @@ export class HrAttendanceService {
           attendanceDate,
           checkIn,
         );
+        const earlyLeaveMinutes = await this.computeEarlyLeaveMinutes(
+          tx,
+          item.employeeId,
+          attendanceDate,
+          checkOut,
+        );
+        const penaltyAmount = HrAttendanceService.computePenaltyAmount({
+          lateMinutes,
+          earlyLeaveMinutes,
+          ...penaltySettings,
+        });
         const status: HrAttendanceStatus =
           item.status === 'present' && lateMinutes > 0 ? 'late' : item.status;
 
@@ -167,6 +244,8 @@ export class HrAttendanceService {
             checkIn,
             checkOut,
             lateMinutes,
+            earlyLeaveMinutes,
+            penaltyAmount,
             remarks: item.remarks,
             markedBy,
           },
@@ -175,6 +254,8 @@ export class HrAttendanceService {
             checkIn,
             checkOut,
             lateMinutes,
+            earlyLeaveMinutes,
+            penaltyAmount,
             remarks: item.remarks,
             markedBy,
           },
@@ -225,12 +306,27 @@ export class HrAttendanceService {
     const checkIn = input.checkIn
       ? new Date(input.checkIn)
       : (existing.checkIn ?? undefined);
+    const checkOut = input.checkOut
+      ? new Date(input.checkOut)
+      : (existing.checkOut ?? undefined);
     const lateMinutes = await this.computeLateMinutes(
       this.prisma,
       existing.employeeId,
       existing.attendanceDate,
       checkIn,
     );
+    const earlyLeaveMinutes = await this.computeEarlyLeaveMinutes(
+      this.prisma,
+      existing.employeeId,
+      existing.attendanceDate,
+      checkOut,
+    );
+    const penaltySettings = await this.resolvePenaltySettings(this.prisma);
+    const penaltyAmount = HrAttendanceService.computePenaltyAmount({
+      lateMinutes,
+      earlyLeaveMinutes,
+      ...penaltySettings,
+    });
     const status = input.status ?? existing.status;
 
     const updated = await this.prisma.hrAttendance.update({
@@ -242,6 +338,8 @@ export class HrAttendanceService {
         overtimeMinutes: input.overtimeMinutes,
         remarks: input.remarks,
         lateMinutes,
+        earlyLeaveMinutes,
+        penaltyAmount,
         markedBy: actorId,
       },
     });

@@ -81,7 +81,10 @@ export class PatientService {
     const existing = await this.prisma.patient.findFirst({
       where: { studentId: dto.studentId, deletedAt: null },
     });
-    if (existing) throw DomainException.conflict('Patient profile already exists for this student');
+    if (existing)
+      throw DomainException.conflict(
+        'Patient profile already exists for this student',
+      );
 
     const patientCode = await this.numberingService.nextCode('patient');
 
@@ -103,12 +106,19 @@ export class PatientService {
       },
     });
 
-    this.events.emit(EventNames.PATIENT_CREATED, { patientId: patient.id, studentId: dto.studentId, createdBy });
+    this.events.emit(EventNames.PATIENT_CREATED, {
+      patientId: patient.id,
+      studentId: dto.studentId,
+      createdBy,
+    });
     return patient;
   }
 
   async createExternal(dto: CreateExternalPatientDto, createdBy: string) {
-    if (!dto.fullName) throw DomainException.validation('fullName is required for external patients');
+    if (!dto.fullName)
+      throw DomainException.validation(
+        'fullName is required for external patients',
+      );
 
     const patientCode = await this.numberingService.nextCode('patient');
 
@@ -131,7 +141,10 @@ export class PatientService {
       },
     });
 
-    this.events.emit(EventNames.PATIENT_CREATED, { patientId: patient.id, createdBy });
+    this.events.emit(EventNames.PATIENT_CREATED, {
+      patientId: patient.id,
+      createdBy,
+    });
     return patient;
   }
 
@@ -151,7 +164,9 @@ export class PatientService {
   async findByIdWithStudentInfo(id: string) {
     const patient = await this.findById(id);
     if (patient.studentId) {
-      const student = await this.studentRead.findActiveById(patient.studentId).catch(() => null);
+      const student = await this.studentRead
+        .findActiveById(patient.studentId)
+        .catch(() => null);
       return { ...patient, studentInfo: student };
     }
     return { ...patient, studentInfo: null };

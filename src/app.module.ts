@@ -35,6 +35,10 @@ import { HealthModule } from './modules/health/health.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { FinanceModule } from './modules/finance/finance.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
+import { ProcurementModule } from './modules/procurement/procurement.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { HardeningModule } from './modules/hardening/hardening.module';
 
 @Module({
   imports: [
@@ -57,6 +61,12 @@ import { FinanceModule } from './modules/finance/finance.module';
       { name: 'pdf' },
       { name: 'billing' },
       { name: 'therapy-ops' },
+      { name: 'payroll' },
+      { name: 'supply-chain' },
+      { name: 'reports' },
+      { name: 'email' },
+      { name: 'sms' },
+      { name: 'notifications' },
     ),
     PrismaModule,
     RedisModule,
@@ -74,6 +84,10 @@ import { FinanceModule } from './modules/finance/finance.module';
     MaintenanceModule,
     AccountsModule,
     FinanceModule,
+    InventoryModule,
+    ProcurementModule,
+    ReportsModule,
+    HardeningModule,
   ],
   providers: [
     TransactionalEventPublisher,

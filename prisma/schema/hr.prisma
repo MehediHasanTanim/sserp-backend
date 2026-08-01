@@ -18,6 +18,7 @@ model Employee {
   confirmationDate   DateTime?      @map("confirmation_date") @db.Date
   basicSalary        Int            @map("basic_salary")
   status             EmployeeStatus @default(on_probation)
+  biometricDeviceUserId String?     @unique @map("biometric_device_user_id")
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")
   createdBy          String?        @map("created_by") @db.Uuid
@@ -40,6 +41,23 @@ model Employee {
   mappingsAsTeacher     StudentTeacherMapping[] @relation("MappingTeacher")
   substitutesAsPrimary  SubstituteAssignment[]  @relation("SubPrimary")
   substitutesAsCover    SubstituteAssignment[]  @relation("SubCover")
+
+  salaryStructures          SalaryStructure[]
+  payrollSlips              PayrollSlip[]
+  bonuses                   Bonus[]
+  payrollAdjustments        PayrollAdjustment[]
+  taxCertificates           TaxCertificate[]
+  gratuityEntitlements      GratuityEntitlement[]
+  gratuityProvisions        GratuityProvision[]
+  gratuityPayments          GratuityPayment[]
+  gratuityLedgerEntries     GratuityLedger[]
+  encashmentRequests        EncashmentRequest[]
+  appraisals                Appraisal[]
+  incrementRecommendations  IncrementRecommendation[]
+  trainingEnrollments       TrainingEnrollment[]
+  trainingAttendance        TrainingAttendance[]
+  benefitEnrollments        BenefitEnrollment[]
+  loans                     EmployeeLoan[]
 
   @@index([department, status])
   @@map("employees")
@@ -149,13 +167,16 @@ model HrAttendance {
   status          HrAttendanceStatus
   checkIn         DateTime?          @map("check_in")
   checkOut        DateTime?          @map("check_out")
-  overtimeMinutes Int                @default(0) @map("overtime_minutes")
-  lateMinutes     Int                @default(0) @map("late_minutes")
-  source          AttendanceSource   @default(manual)
-  remarks         String?
-  markedBy        String?            @map("marked_by") @db.Uuid
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  overtimeMinutes   Int                @default(0) @map("overtime_minutes")
+  lateMinutes       Int                @default(0) @map("late_minutes")
+  earlyLeaveMinutes Int                @default(0) @map("early_leave_minutes")
+  /// Monetary penalty in currency minor units (late + early leave).
+  penaltyAmount     Int                @default(0) @map("penalty_amount")
+  source            AttendanceSource   @default(manual)
+  remarks           String?
+  markedBy          String?            @map("marked_by") @db.Uuid
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
@@ -181,8 +202,9 @@ model LeaveType {
   createdAt                          DateTime @default(now()) @map("created_at")
   updatedAt                          DateTime @updatedAt @map("updated_at")
 
-  balances LeaveBalance[]
-  requests HrLeaveRequest[]
+  balances           LeaveBalance[]
+  requests           HrLeaveRequest[]
+  encashmentRequests EncashmentRequest[]
 
   @@map("leave_types")
 }

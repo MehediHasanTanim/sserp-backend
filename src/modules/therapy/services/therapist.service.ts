@@ -9,7 +9,12 @@ import {
 import { EventNames } from '../../../shared/events/event-names';
 import { HrEmployeeReadService } from '../../hr/services/hr-employee-read.service';
 
-const GROUP_SUPPORTING_TYPES: TherapyType[] = ['ot', 'speech', 'music', 'dance'];
+const GROUP_SUPPORTING_TYPES: TherapyType[] = [
+  'ot',
+  'speech',
+  'music',
+  'dance',
+];
 
 function deriveSupportsGroup(therapyType: TherapyType): boolean {
   return GROUP_SUPPORTING_TYPES.includes(therapyType);
@@ -74,7 +79,10 @@ export class TherapistService {
     const existing = await this.prisma.therapist.findFirst({
       where: { employeeId: dto.employeeId, deletedAt: null },
     });
-    if (existing) throw DomainException.conflict('Therapist profile already exists for this employee');
+    if (existing)
+      throw DomainException.conflict(
+        'Therapist profile already exists for this employee',
+      );
 
     const therapist = await this.prisma.therapist.create({
       data: {
@@ -87,7 +95,10 @@ export class TherapistService {
       },
     });
 
-    this.events.emit(EventNames.THERAPIST_CREATED, { therapistId: therapist.id, createdBy });
+    this.events.emit(EventNames.THERAPIST_CREATED, {
+      therapistId: therapist.id,
+      createdBy,
+    });
     return therapist;
   }
 
@@ -126,7 +137,9 @@ export class TherapistService {
       });
     } catch (e: any) {
       if (e?.code === 'P2002') {
-        throw DomainException.conflict('Specialization already exists for this therapist');
+        throw DomainException.conflict(
+          'Specialization already exists for this therapist',
+        );
       }
       throw e;
     }
@@ -137,7 +150,9 @@ export class TherapistService {
       where: { therapistId, therapyType },
     });
     if (!spec) throw DomainException.notFound('Specialization not found');
-    await this.prisma.therapistSpecialization.delete({ where: { id: spec.id } });
+    await this.prisma.therapistSpecialization.delete({
+      where: { id: spec.id },
+    });
   }
 
   async addLicense(dto: AddLicenseDto) {
@@ -156,7 +171,10 @@ export class TherapistService {
     });
   }
 
-  async updateLicenseStatus(licenseId: string, status: 'valid' | 'expiring' | 'expired') {
+  async updateLicenseStatus(
+    licenseId: string,
+    status: 'valid' | 'expiring' | 'expired',
+  ) {
     return this.prisma.therapistLicense.update({
       where: { id: licenseId },
       data: { status },
@@ -189,5 +207,51 @@ export class TherapistService {
       where: { id },
       data: { deletedAt: new Date() },
     });
+  }
+
+  async performanceSummary(therapistId: string, from?: Date, to?: Date) {
+    await this.findById(therapistId);
+    const where = {
+      therapistId,
+      ...(from || to
+        ? {
+            scheduledStart: {
+              ...(from ? { gte: from } : {}),
+              ...(to ? { lte: to } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const [conducted, cancelled, noShow, patients] = await Promise.all([
+      this.prisma.therapySession.count({
+        where: { ...where, status: 'completed' },
+      }),
+      this.prisma.therapySession.count({
+        where: { ...where, status: 'cancelled' },
+      }),
+      this.prisma.therapySession.count({
+        where: { ...where, status: 'no_show' },
+      }),
+      this.prisma.therapySession.findMany({
+        where: {
+          ...where,
+          status: { in: ['completed', 'scheduled', 'in_progress'] },
+          patientId: { not: null },
+        },
+        select: { patientId: true },
+        distinct: ['patientId'],
+      }),
+    ]);
+
+    return {
+      therapistId,
+      from: from?.toISOString() ?? null,
+      to: to?.toISOString() ?? null,
+      sessionsConducted: conducted,
+      cancellations: cancelled,
+      noShows: noShow,
+      distinctPatientsServed: patients.length,
+    };
   }
 }

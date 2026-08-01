@@ -9,7 +9,10 @@ import { PatientController } from './controllers/patient.controller';
 import { SessionController } from './controllers/session.controller';
 import { GroupController } from './controllers/group.controller';
 import { TreatmentPlanController } from './controllers/treatment-plan.controller';
-import { TherapyBillingController, WaitingListController } from './controllers/therapy-billing.controller';
+import {
+  TherapyBillingController,
+  WaitingListController,
+} from './controllers/therapy-billing.controller';
 
 import { TherapistService } from './services/therapist.service';
 import { PatientService } from './services/patient.service';

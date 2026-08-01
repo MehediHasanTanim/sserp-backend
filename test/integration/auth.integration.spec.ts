@@ -1,35 +1,24 @@
-import { Test } from '@nestjs/testing';
-import {
-  INestApplication,
-  ValidationPipe,
-  VersioningType,
-} from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import * as cookieParser from 'cookie-parser';
-import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/shared/prisma/prisma.service';
+import { PasswordService } from '../../src/modules/auth/services/password.service';
+import { createHarnessApp } from './helpers/harness.helper';
 
-describe('Auth integration (local stack)', () => {
+/**
+ * Pilot suite on shared harness (Testcontainers when SSERP_USE_TESTCONTAINERS=1).
+ */
+describe('Auth integration (harness)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = moduleRef.createNestApplication();
-    app.setGlobalPrefix('api');
-    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-    app.use(cookieParser());
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    await app.init();
-    prisma = app.get(PrismaService);
-  }, 60000);
+    const ctx = await createHarnessApp();
+    app = ctx.app;
+    prisma = ctx.prisma;
+  }, 180000);
 
   afterAll(async () => {
-    await app.close();
+    // Shared harness — do not stop containers here; suite isolation only.
   });
 
   it('login → me → change-password flow for bootstrap admin', async () => {
@@ -37,6 +26,15 @@ describe('Auth integration (local stack)', () => {
       .post('/api/v1/auth/login')
       .send({ identifier: 'superadmin', password: 'ChangeMeNow1' })
       .expect(201);
+
+    const record = (
+      globalThis as {
+        recordTestRoute?: (method: string, path: string) => void;
+      }
+    ).recordTestRoute;
+    if (typeof record === 'function') {
+      record('POST', '/api/v1/auth/login');
+    }
 
     const token = login.body.data.accessToken as string;
     expect(token).toBeTruthy();
@@ -54,7 +52,6 @@ describe('Auth integration (local stack)', () => {
         expect(res.body.data.mustChangePassword).toBe(true);
       });
 
-    // admin list blocked while must_change_password
     await request(app.getHttpServer())
       .get('/api/v1/admin/users')
       .set('Authorization', `Bearer ${token}`)
@@ -76,9 +73,6 @@ describe('Auth integration (local stack)', () => {
       .set('Authorization', `Bearer ${login2.body.data.accessToken}`)
       .expect(200);
 
-    // restore seed password for other runs
-    const { PasswordService } =
-      await import('../../src/modules/auth/services/password.service');
     const passwords = app.get(PasswordService);
     const hash = await passwords.hash('ChangeMeNow1');
     await prisma.user.update({
@@ -99,6 +93,8 @@ describe('Auth integration (local stack)', () => {
       .post('/api/v1/auth/login')
       .send({ identifier: 'superadmin', password: 'WrongPass99' });
     expect(a.status).toBe(b.status);
-    expect(a.body.error.code).toBe(b.body.error.code);
+    expect(a.body.errorCode ?? a.body.message).toEqual(
+      b.body.errorCode ?? b.body.message,
+    );
   });
 });

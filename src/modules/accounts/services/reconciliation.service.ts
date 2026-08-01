@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { DomainException, ErrorCode } from '../../../shared/errors/domain-exception';
+import {
+  DomainException,
+  ErrorCode,
+} from '../../../shared/errors/domain-exception';
 import { EventNames } from '../../../shared/events/event-names';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 
@@ -82,13 +85,18 @@ export class ReconciliationService {
       const candidates = journalLines.filter((jl) => {
         const jlAmount = jl.debitAmount || jl.creditAmount;
         if (jlAmount !== amount) return false;
-        const diff = Math.abs(sl.transactionDate.getTime() - jl.journal.entryDate.getTime());
+        const diff = Math.abs(
+          sl.transactionDate.getTime() - jl.journal.entryDate.getTime(),
+        );
         return diff <= 3 * DAY_MS;
       });
       if (candidates.length === 1) {
         await this.prisma.bankStatementLine.update({
           where: { id: sl.id },
-          data: { matchedJournalLineId: candidates[0].id, matchStatus: 'auto_matched' },
+          data: {
+            matchedJournalLineId: candidates[0].id,
+            matchStatus: 'auto_matched',
+          },
         });
         matched++;
       }
@@ -96,7 +104,11 @@ export class ReconciliationService {
     return { matched };
   }
 
-  async manualMatch(statementLineId: string, journalLineId: string, userId: string) {
+  async manualMatch(
+    statementLineId: string,
+    journalLineId: string,
+    userId: string,
+  ) {
     return this.prisma.bankStatementLine.update({
       where: { id: statementLineId },
       data: {
@@ -134,12 +146,16 @@ export class ReconciliationService {
       where: { id },
       data: { status: 'completed', completedBy, completedAt: new Date() },
     });
-    this.events.emit(EventNames.RECONCILIATION_COMPLETED, { reconciliationId: id });
+    this.events.emit(EventNames.RECONCILIATION_COMPLETED, {
+      reconciliationId: id,
+    });
     return updated;
   }
 
   private async computeSystemBalance(bankAccountId: string, asOf: Date) {
-    const bank = await this.prisma.bankAccount.findUnique({ where: { id: bankAccountId } });
+    const bank = await this.prisma.bankAccount.findUnique({
+      where: { id: bankAccountId },
+    });
     if (!bank) return 0;
     const agg = await this.prisma.journalLine.aggregate({
       where: {
@@ -148,6 +164,10 @@ export class ReconciliationService {
       },
       _sum: { debitAmount: true, creditAmount: true },
     });
-    return bank.openingBalance + (agg._sum.debitAmount ?? 0) - (agg._sum.creditAmount ?? 0);
+    return (
+      bank.openingBalance +
+      (agg._sum.debitAmount ?? 0) -
+      (agg._sum.creditAmount ?? 0)
+    );
   }
 }

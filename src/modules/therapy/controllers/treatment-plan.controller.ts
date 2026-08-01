@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Put,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { CurrentUser, AuthUser, Roles } from '../../../shared/decorators';
 import { TreatmentPlanService } from '../services/treatment-plan.service';
 

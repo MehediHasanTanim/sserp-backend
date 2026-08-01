@@ -31,7 +31,9 @@ export class AccountsOpsJob {
     const debit = agg._sum.totalDebit ?? 0;
     const credit = agg._sum.totalCredit ?? 0;
     if (debit !== credit) {
-      this.logger.error(`Ledger integrity failure: debit=${debit} credit=${credit}`);
+      this.logger.error(
+        `Ledger integrity failure: debit=${debit} credit=${credit}`,
+      );
     } else {
       this.logger.log('Ledger integrity OK');
     }
@@ -40,7 +42,9 @@ export class AccountsOpsJob {
   @Cron('0 7 * * 1')
   async arAgingLog() {
     const aging = await this.receivables.aging();
-    this.logger.log(`AR aging: ${JSON.stringify(aging.buckets)} (${aging.count} open)`);
+    this.logger.log(
+      `AR aging: ${JSON.stringify(aging.buckets)} (${aging.count} open)`,
+    );
   }
 
   @Cron('0 8 25 * *')
@@ -54,17 +58,24 @@ export class AccountsOpsJob {
       },
     });
     if (open) {
-      this.logger.warn(`Fiscal period ${open.periodYear}-${open.periodMonth} still open near month-end`);
+      this.logger.warn(
+        `Fiscal period ${open.periodYear}-${open.periodMonth} still open near month-end`,
+      );
     }
   }
 
   @Cron('0 9 * * *')
   async chequeReminder() {
     const stale = await this.prisma.cheque.count({
-      where: { status: 'presented', chequeDate: { lt: new Date(Date.now() - 7 * 86400000) } },
+      where: {
+        status: 'presented',
+        chequeDate: { lt: new Date(Date.now() - 7 * 86400000) },
+      },
     });
     if (stale > 0) {
-      this.logger.warn(`${stale} cheque(s) presented >7 days without clearance`);
+      this.logger.warn(
+        `${stale} cheque(s) presented >7 days without clearance`,
+      );
     }
   }
 
@@ -104,7 +115,10 @@ export class AccountsOpsJob {
         failed++;
         await this.prisma.pendingLedgerPosting.update({
           where: { id: row.id },
-          data: { status: 'failed', errorMessage: e?.message ?? 'Unknown error' },
+          data: {
+            status: 'failed',
+            errorMessage: e?.message ?? 'Unknown error',
+          },
         });
         this.logger.error(`Outbox replay failed for ${row.id}: ${e?.message}`);
       }
@@ -116,7 +130,9 @@ export class AccountsOpsJob {
   async outboxReplayCron() {
     const result = await this.outboxReplay();
     if (result.processed > 0) {
-      this.logger.log(`outbox-replay posted=${result.posted} failed=${result.failed}`);
+      this.logger.log(
+        `outbox-replay posted=${result.posted} failed=${result.failed}`,
+      );
     }
   }
 }

@@ -15,7 +15,11 @@ export interface RenderedPdf {
   renderedWithBrowser: boolean;
 }
 
-const TEMPLATE_DIR = path.join(__dirname, '../../school/pdf');
+const TEMPLATE_DIRS = [
+  path.join(__dirname, '../../school/pdf'),
+  path.join(__dirname, '../../hr/pdf'),
+  path.join(__dirname, '../../reports/pdf'),
+];
 const templateCache = new Map<string, Handlebars.TemplateDelegate>();
 
 Handlebars.registerHelper('json', (context: unknown) =>
@@ -33,10 +37,22 @@ Handlebars.registerHelper('json', (context: unknown) =>
 export class PdfRendererService {
   private readonly logger = new Logger(PdfRendererService.name);
 
+  private resolveTemplatePath(templateName: string): string {
+    const candidates = TEMPLATE_DIRS.map((dir) =>
+      path.join(dir, `${templateName}.template.hbs`),
+    );
+    for (const filePath of candidates) {
+      if (fs.existsSync(filePath)) return filePath;
+    }
+    throw new Error(
+      `PDF template not found: ${templateName}.template.hbs (searched ${TEMPLATE_DIRS.join(', ')})`,
+    );
+  }
+
   private compile(templateName: string): Handlebars.TemplateDelegate {
     const cached = templateCache.get(templateName);
     if (cached) return cached;
-    const filePath = path.join(TEMPLATE_DIR, `${templateName}.template.hbs`);
+    const filePath = this.resolveTemplatePath(templateName);
     const source = fs.readFileSync(filePath, 'utf8');
     const compiled = Handlebars.compile(source);
     templateCache.set(templateName, compiled);

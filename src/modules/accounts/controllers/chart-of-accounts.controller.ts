@@ -1,7 +1,18 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles, CurrentUser, AuthUser } from '../../../shared/decorators';
-import { ChartOfAccountsService, CreateAccountDto } from '../services/chart-of-accounts.service';
+import {
+  ChartOfAccountsService,
+  CreateAccountDto,
+} from '../services/chart-of-accounts.service';
 
 const READ_ROLES = ['accountant', 'principal', 'super_admin'] as const;
 const WRITE_ROLES = ['accountant', 'super_admin'] as const;

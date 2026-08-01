@@ -1,0 +1,19 @@
+rules:
+  - id: no-console
+    patterns:
+      - pattern-either:
+          - pattern: console.log(...)
+          - pattern: console.warn(...)
+          - pattern: console.error(...)
+          - pattern: console.debug(...)
+          - pattern: console.info(...)
+    message: >
+      console.* is banned — use the winston Nest logger.
+    languages: [typescript]
+    severity: ERROR
+    paths:
+      include:
+        - src/modules/**
+      exclude:
+        - src/**/*.spec.ts
+        - src/modules/notifications/providers/sms/console.provider.ts

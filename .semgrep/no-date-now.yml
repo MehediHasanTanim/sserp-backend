@@ -1,0 +1,14 @@
+rules:
+  - id: no-date-now
+    patterns:
+      - pattern: Date.now(...)
+    message: >
+      Date.now() is banned in services — inject OrgClockService for deterministic time.
+      (WARNING until OrgClock migration completes across all services.)
+    languages: [typescript]
+    severity: WARNING
+    paths:
+      include:
+        - src/modules/**/services/**
+      exclude:
+        - src/**/*.spec.ts

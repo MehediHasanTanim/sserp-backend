@@ -1,0 +1,174 @@
+// Phase 7: Reports, Analytics & Dashboards
+
+model ReportDefinition {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                String              @unique
+  name                String
+  module              String
+  category            String
+  description         String?
+  parameters          Json                @default("{}")
+  supportedFormats    String[]            @map("supported_formats")
+  requiredPermissions Json                @default("[]") @map("required_permissions")
+  defaultSort         String?             @map("default_sort")
+  isExportable        Boolean             @default(true) @map("is_exportable")
+  isSchedulable       Boolean             @default(true) @map("is_schedulable")
+  estimatedCost       ReportEstimatedCost @default(light) @map("estimated_cost")
+  isActive            Boolean             @default(false) @map("is_active")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  @@map("report_definitions")
+}
+
+model SavedReportTemplate {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportCode      String           @map("report_code")
+  name            String
+  ownerUserId     String           @map("owner_user_id") @db.Uuid
+  visibility      ReportVisibility @default(private)
+  visibleToRoles  String[]         @default([]) @map("visible_to_roles")
+  parameters      Json             @default("{}")
+  columnSelection Json             @default("[]") @map("column_selection")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@index([ownerUserId])
+  @@index([reportCode])
+  @@map("saved_report_templates")
+}
+
+model CustomReport {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  ownerUserId     String           @map("owner_user_id") @db.Uuid
+  baseDataset     String           @map("base_dataset")
+  selectedColumns Json             @default("[]") @map("selected_columns")
+  filters         Json             @default("[]")
+  groupBy         Json             @default("[]") @map("group_by")
+  aggregations    Json             @default("[]")
+  sort            Json             @default("[]")
+  visibility      ReportVisibility @default(private)
+  visibleToRoles  String[]         @default([]) @map("visible_to_roles")
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  exportJobs ExportJob[]
+
+  @@map("custom_reports")
+}
+
+model ReportDataset {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key           String              @unique
+  name          String
+  module        String
+  columns       Json                @default("[]")
+  joins         Json                @default("[]")
+  rowLevelScope ReportRowLevelScope @default(none) @map("row_level_scope")
+  isActive      Boolean             @default(true) @map("is_active")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  @@map("report_datasets")
+}
+
+model ExportJob {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportCode      String?         @map("report_code")
+  customReportId  String?         @map("custom_report_id") @db.Uuid
+  requestedBy     String          @map("requested_by") @db.Uuid
+  parameters      Json            @default("{}")
+  format          ExportJobFormat
+  status          ExportJobStatus @default(queued)
+  progressPercent Int             @default(0) @map("progress_percent")
+  rowCount        Int?            @map("row_count")
+  objectKey       String?         @map("object_key")
+  fileSizeBytes   Int?            @map("file_size_bytes")
+  errorMessage    String?         @map("error_message")
+  queuedAt        DateTime        @default(now()) @map("queued_at")
+  startedAt       DateTime?       @map("started_at")
+  completedAt     DateTime?       @map("completed_at")
+  expiresAt       DateTime?       @map("expires_at")
+
+  customReport        CustomReport?        @relation(fields: [customReportId], references: [id])
+  scheduledReportRuns ScheduledReportRun[]
+
+  @@index([requestedBy, status])
+  @@index([status, queuedAt])
+  @@index([expiresAt])
+  @@map("export_jobs")
+}
+
+model ScheduledReport {
+  id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportCode       String                    @map("report_code")
+  savedTemplateId  String?                   @map("saved_template_id") @db.Uuid
+  name             String
+  frequency        ScheduledReportFrequency
+  dayOfWeek        Int?                      @map("day_of_week")
+  dayOfMonth       Int?                      @map("day_of_month")
+  sendTime         String                    @map("send_time")
+  timezone         String
+  format           ExportJobFormat
+  recipientUserIds String[]                  @default([]) @map("recipient_user_ids") @db.Uuid
+  recipientEmails  String[]                  @default([]) @map("recipient_emails")
+  parameters       Json                      @default("{}")
+  isActive         Boolean                   @default(true) @map("is_active")
+  lastRunAt        DateTime?                 @map("last_run_at")
+  lastRunStatus    ScheduledReportRunStatus? @map("last_run_status")
+  nextRunAt        DateTime?                 @map("next_run_at")
+  createdBy        String                    @map("created_by") @db.Uuid
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+
+  runs ScheduledReportRun[]
+
+  @@index([isActive, nextRunAt])
+  @@map("scheduled_reports")
+}
+
+model ScheduledReportRun {
+  id                 String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scheduledReportId  String                   @map("scheduled_report_id") @db.Uuid
+  runAt              DateTime                 @map("run_at")
+  status             ScheduledReportRunStatus
+  exportJobId        String?                  @map("export_job_id") @db.Uuid
+  recipientsNotified Int                      @default(0) @map("recipients_notified")
+  errorMessage       String?                  @map("error_message")
+  createdAt          DateTime                 @default(now()) @map("created_at")
+
+  scheduledReport ScheduledReport @relation(fields: [scheduledReportId], references: [id], onDelete: Cascade)
+  exportJob       ExportJob?      @relation(fields: [exportJobId], references: [id])
+
+  @@map("scheduled_report_runs")
+}
+
+model DashboardWidgetPreference {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  dashboardRole String   @map("dashboard_role")
+  widgetLayout  Json     @default("[]") @map("widget_layout")
+  hiddenWidgets String[] @default([]) @map("hidden_widgets")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, dashboardRole])
+  @@map("dashboard_widget_preferences")
+}
+
+model MvRefreshLog {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  viewName     String          @map("view_name")
+  startedAt    DateTime        @map("started_at")
+  completedAt  DateTime?       @map("completed_at")
+  durationMs   Int?            @map("duration_ms")
+  rowCount     Int?            @map("row_count")
+  status       MvRefreshStatus
+  errorMessage String?         @map("error_message")
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  @@index([viewName, startedAt])
+  @@map("mv_refresh_log")
+}

@@ -1,0 +1,22 @@
+rules:
+  - id: no-process-env
+    patterns:
+      - pattern: process.env
+    message: >
+      process.env is banned outside config/ — read settings via Nest ConfigService.
+    languages: [typescript]
+    severity: ERROR
+    paths:
+      include:
+        - src/**
+      exclude:
+        - src/config/**
+        - src/main.ts
+        - src/worker.main.ts
+        - src/app.module.ts
+        - src/**/*.spec.ts
+        - src/shared/testing/**
+        - src/shared/logger/**
+        - src/modules/hardening/middleware/**
+        - src/modules/notifications/gateway/realtime.gateway.ts
+        - src/modules/files/pdf/pdf-renderer.service.ts

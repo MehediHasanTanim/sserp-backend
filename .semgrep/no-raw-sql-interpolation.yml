@@ -1,0 +1,17 @@
+rules:
+  - id: no-raw-sql-interpolation
+    patterns:
+      - pattern-either:
+          - pattern: $PRISMA.$queryRaw`...${...}...`
+          - pattern: $PRISMA.$executeRaw`...${...}...`
+    message: >
+      Do not interpolate values into $queryRaw / $executeRaw template literals.
+      Use $queryRawUnsafe with bound parameters or Prisma.sql tagged fragments.
+    languages: [typescript]
+    severity: WARNING
+    paths:
+      include:
+        - src/**
+      exclude:
+        - src/**/*.spec.ts
+        - src/shared/testing/**

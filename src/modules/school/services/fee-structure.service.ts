@@ -87,7 +87,9 @@ export class FeeStructureService {
         amount: input.amount,
         frequency: input.frequency,
         effectiveFrom: new Date(input.effectiveFrom),
-        effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : undefined,
+        effectiveTo: input.effectiveTo
+          ? new Date(input.effectiveTo)
+          : undefined,
       },
     });
   }
@@ -101,7 +103,9 @@ export class FeeStructureService {
       where: { id },
       data: {
         amount: input.amount,
-        effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : undefined,
+        effectiveTo: input.effectiveTo
+          ? new Date(input.effectiveTo)
+          : undefined,
       },
     });
   }
@@ -197,7 +201,9 @@ export class FeeStructureService {
         status: autoApprove ? 'approved' : 'pending',
         approvedAt: autoApprove ? new Date() : undefined,
         effectiveFrom: new Date(input.effectiveFrom),
-        effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : undefined,
+        effectiveTo: input.effectiveTo
+          ? new Date(input.effectiveTo)
+          : undefined,
       },
     });
   }

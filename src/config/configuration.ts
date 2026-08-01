@@ -33,8 +33,32 @@ export default () =>
       port: Number(process.env.SMTP_PORT ?? 1025),
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
+      from: process.env.SMTP_FROM,
+    },
+    sms: {
+      provider: process.env.SMS_PROVIDER ?? 'console',
+      apiUrl: process.env.SMS_API_URL,
+      apiKey: process.env.SMS_API_KEY,
+      senderId: process.env.SMS_SENDER_ID,
     },
     smsProvider: process.env.SMS_PROVIDER ?? 'console',
+    wsCorsOrigins: (
+      process.env.WS_CORS_ORIGINS ??
+      process.env.CORS_ORIGINS ??
+      'http://localhost:3001'
+    )
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    redisPubsubUrl: process.env.REDIS_PUBSUB_URL ?? process.env.REDIS_URL,
+    sentryDsn: process.env.SENTRY_DSN ?? '',
+    fieldEncryptionMasterKey:
+      process.env.FIELD_ENCRYPTION_MASTER_KEY ??
+      'dev-only-master-key-32bytes-long!!',
+    blindIndexKey:
+      process.env.BLIND_INDEX_KEY ?? 'dev-only-blind-index-key-32b!!',
+    featureBiometric: process.env.FEATURE_BIOMETRIC === 'true',
+    featurePaymentGateway: process.env.FEATURE_PAYMENT_GATEWAY === 'true',
     corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:3001')
       .split(',')
       .map((s) => s.trim())
@@ -67,8 +91,27 @@ export interface AppConfig {
     useSSL: boolean;
     presignTtlSeconds: number;
   };
-  smtp: { host: string; port: number; user?: string; pass?: string };
+  smtp: {
+    host: string;
+    port: number;
+    user?: string;
+    pass?: string;
+    from?: string;
+  };
+  sms: {
+    provider: string;
+    apiUrl?: string;
+    apiKey?: string;
+    senderId?: string;
+  };
   smsProvider: string;
+  wsCorsOrigins: string[];
+  redisPubsubUrl: string;
+  sentryDsn: string;
+  fieldEncryptionMasterKey: string;
+  blindIndexKey: string;
+  featureBiometric: boolean;
+  featurePaymentGateway: boolean;
   corsOrigins: string[];
   logLevel: string;
   cookieSecure: boolean;

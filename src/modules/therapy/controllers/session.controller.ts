@@ -1,13 +1,6 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Put,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { CurrentUser, AuthUser, Roles } from '../../../shared/decorators';
+import { DomainException } from '../../../shared/errors/domain-exception';
 import { SessionService } from '../services/session.service';
 import { RecurrenceService } from '../services/recurrence.service';
 
@@ -27,6 +20,32 @@ export class SessionController {
   @Post('check-conflicts')
   checkConflicts(@Body() body: any) {
     return this.sessionService.checkConflicts(body);
+  }
+
+  @Get('schedule/feed')
+  scheduleFeed(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('therapistId') therapistId?: string,
+    @Query('patientId') patientId?: string,
+  ) {
+    if (!therapistId && !patientId) {
+      throw DomainException.validation(
+        'therapistId or patientId query param is required',
+      );
+    }
+    if (patientId) {
+      return this.sessionService.listByPatient(
+        patientId,
+        from ? new Date(from) : undefined,
+        to ? new Date(to) : undefined,
+      );
+    }
+    return this.sessionService.listByTherapist(
+      therapistId!,
+      new Date(from),
+      new Date(to),
+    );
   }
 
   @Get(':id')
@@ -58,7 +77,11 @@ export class SessionController {
     @Body() body: { cancellationReason: string },
     @CurrentUser() user: AuthUser,
   ) {
-    return this.sessionService.cancel(sessionId, body.cancellationReason, user.id);
+    return this.sessionService.cancel(
+      sessionId,
+      body.cancellationReason,
+      user.id,
+    );
   }
 
   @Put(':id/no-show')
@@ -91,7 +114,12 @@ export class SessionController {
     @Body() body: { comment?: string },
     @CurrentUser() user: AuthUser,
   ) {
-    return this.sessionService.coSignNote(sessionId, patientId, user.id, body.comment);
+    return this.sessionService.coSignNote(
+      sessionId,
+      patientId,
+      user.id,
+      body.comment,
+    );
   }
 
   // Recurrence endpoints
@@ -106,11 +134,18 @@ export class SessionController {
     @Body() body: { fromDate: string },
     @CurrentUser() user: AuthUser,
   ) {
-    return this.recurrenceService.cancelFrom(recurrenceId, new Date(body.fromDate), user.id);
+    return this.recurrenceService.cancelFrom(
+      recurrenceId,
+      new Date(body.fromDate),
+      user.id,
+    );
   }
 
   @Put('recurrences/:id/cancel-all')
-  cancelRecurrenceAll(@Param('id') recurrenceId: string, @CurrentUser() user: AuthUser) {
+  cancelRecurrenceAll(
+    @Param('id') recurrenceId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.recurrenceService.cancelAll(recurrenceId, user.id);
   }
 
@@ -120,18 +155,11 @@ export class SessionController {
     @Body() body: any,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.recurrenceService.editFromDate(recurrenceId, new Date(body.fromDate), body.changes, user.id);
-  }
-
-  @Get('schedule/feed')
-  scheduleFeed(
-    @Query('from') from: string,
-    @Query('to') to: string,
-    @Query('therapistId') therapistId?: string,
-  ) {
-    if (!therapistId) {
-      return [];
-    }
-    return this.sessionService.listByTherapist(therapistId, new Date(from), new Date(to));
+    return this.recurrenceService.editFromDate(
+      recurrenceId,
+      new Date(body.fromDate),
+      body.changes,
+      user.id,
+    );
   }
 }

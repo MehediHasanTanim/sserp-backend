@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { CurrentUser, AuthUser, Roles } from '../../../shared/decorators';
 import { TherapyBillingService } from '../services/therapy-billing.service';
 import { WaitingListService } from '../services/waiting-list.service';
@@ -19,7 +12,10 @@ export class TherapyBillingController {
   ) {}
 
   @Post('sessions/:sessionId/invoice')
-  generateSessionInvoice(@Param('sessionId') sessionId: string, @CurrentUser() user: AuthUser) {
+  generateSessionInvoice(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.billingService.generatePerSessionInvoice(sessionId, user.id);
   }
 
@@ -29,7 +25,12 @@ export class TherapyBillingController {
     @Body() body: { month: number; year: number },
     @CurrentUser() user: AuthUser,
   ) {
-    return this.billingService.generateMonthlyConsolidated(patientId, body.month, body.year, user.id);
+    return this.billingService.generateMonthlyConsolidated(
+      patientId,
+      body.month,
+      body.year,
+      user.id,
+    );
   }
 
   @Post('invoices/:invoiceId/payments')
@@ -45,7 +46,10 @@ export class TherapyBillingController {
   }
 
   @Post('payments/:paymentId/reverse')
-  reversePayment(@Param('paymentId') paymentId: string, @CurrentUser() user: AuthUser) {
+  reversePayment(
+    @Param('paymentId') paymentId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.billingService.reversePayment(paymentId, user.id);
   }
 

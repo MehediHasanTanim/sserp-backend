@@ -71,9 +71,7 @@ export class IepReviewService {
           actualDate,
           outcomeSummary: input.outcomeSummary,
           nextReviewDate,
-          attendees: input.attendees
-            ? (input.attendees as object)
-            : undefined,
+          attendees: input.attendees ? (input.attendees as object) : undefined,
           conductedBy: actorId,
         },
       });

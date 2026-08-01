@@ -110,7 +110,9 @@ export class StudentHealthService {
         vaccineName: input.vaccineName,
         doseNumber: input.doseNumber,
         administeredDate: new Date(input.administeredDate),
-        nextDueDate: input.nextDueDate ? new Date(input.nextDueDate) : undefined,
+        nextDueDate: input.nextDueDate
+          ? new Date(input.nextDueDate)
+          : undefined,
         attachmentId: input.attachmentId,
       },
     });

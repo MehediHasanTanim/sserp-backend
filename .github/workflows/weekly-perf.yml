@@ -1,0 +1,47 @@
+name: Weekly performance (k6)
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+      USER: ${{ secrets.STAGING_K6_USER }}
+      PASSWORD: ${{ secrets.STAGING_K6_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require staging URL
+        run: |
+          if [ -z "$BASE_URL" ]; then
+            echo "STAGING_BASE_URL secret not configured — skipping k6."
+            exit 0
+          fi
+      - name: Install k6
+        if: env.BASE_URL != ''
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+      - name: Run k6 suite
+        if: env.BASE_URL != ''
+        run: |
+          for s in login-spike full-system-load full-system-stress full-system-spike therapy-calendar-load dashboard-kpi-load; do
+            echo "==> $s"
+            k6 run "k6/scripts/${s}.js" || exit 1
+          done
+      - name: Upload k6 summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results
+          path: |
+            *.json
+            reports/
+          retention-days: 90
+          if-no-files-found: ignore

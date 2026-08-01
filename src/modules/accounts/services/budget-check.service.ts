@@ -164,7 +164,10 @@ export class BudgetCheckService {
       );
       return { ok: true };
     } catch (e) {
-      if (e instanceof DomainException && e.code === ErrorCode.BUDGET_EXCEEDED) {
+      if (
+        e instanceof DomainException &&
+        e.code === ErrorCode.BUDGET_EXCEEDED
+      ) {
         return { ok: false, details: e.details };
       }
       throw e;

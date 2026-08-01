@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Put,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { CurrentUser, AuthUser, Roles } from '../../../shared/decorators';
 import { GroupService } from '../services/group.service';
 
@@ -43,7 +36,12 @@ export class GroupController {
     @Body() body: { exitReason: string },
     @CurrentUser() user: AuthUser,
   ) {
-    return this.groupService.exitMember(groupId, patientId, body.exitReason, user.id);
+    return this.groupService.exitMember(
+      groupId,
+      patientId,
+      body.exitReason,
+      user.id,
+    );
   }
 
   @Post('sessions/:sessionId/attendance')
@@ -52,7 +50,10 @@ export class GroupController {
     @Body() body: any,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.groupService.markGroupAttendance({ sessionId, attendances: body.attendances }, user.id);
+    return this.groupService.markGroupAttendance(
+      { sessionId, attendances: body.attendances },
+      user.id,
+    );
   }
 
   @Put(':id/close')

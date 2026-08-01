@@ -20,9 +20,17 @@ describe('FeeInvoiceService', () => {
     const cases: Array<{
       name: string;
       lines: { feeHeadId: string; amount: number }[];
-      discounts: { discountType: 'percentage' | 'fixed'; value: number; feeHeadId?: string | null }[];
+      discounts: {
+        discountType: 'percentage' | 'fixed';
+        value: number;
+        feeHeadId?: string | null;
+      }[];
       scholarships: { coverageType: 'percentage' | 'fixed'; value: number }[];
-      expected: { grossAmount: number; discountAmount: number; netAmount: number };
+      expected: {
+        grossAmount: number;
+        discountAmount: number;
+        netAmount: number;
+      };
     }> = [
       {
         name: '1. single head, no discount, no scholarship',
@@ -148,7 +156,11 @@ describe('FeeInvoiceService', () => {
         student: {
           findMany: jest
             .fn()
-            .mockResolvedValue([activeStudent, leaveStudent, alreadyInvoicedStudent]),
+            .mockResolvedValue([
+              activeStudent,
+              leaveStudent,
+              alreadyInvoicedStudent,
+            ]),
         },
         feeInvoice: {
           findFirst: jest.fn().mockImplementation(({ where }) => {
@@ -170,7 +182,9 @@ describe('FeeInvoiceService', () => {
       events = { emitAsync: jest.fn().mockResolvedValue(undefined) };
       ledger = { post: jest.fn().mockResolvedValue({ deferred: true }) };
       feeStructures = {
-        currentFeeCategory: jest.fn().mockResolvedValue({ feeCategoryId: 'cat1' }),
+        currentFeeCategory: jest
+          .fn()
+          .mockResolvedValue({ feeCategoryId: 'cat1' }),
         applicableStructures: jest
           .fn()
           .mockResolvedValue([
@@ -283,7 +297,10 @@ describe('FeeInvoiceService', () => {
         paidAmount: 0,
         status: 'issued',
       });
-      prisma.feeInvoice.update.mockResolvedValue({ id: 'inv1', status: 'cancelled' });
+      prisma.feeInvoice.update.mockResolvedValue({
+        id: 'inv1',
+        status: 'cancelled',
+      });
 
       const result = await service.cancel('inv1', { reason: 'duplicate' });
       expect(result.status).toBe('cancelled');
@@ -298,7 +315,10 @@ describe('FeeInvoiceService', () => {
 
       await expect(
         service.cancel('inv1', { reason: 'duplicate' }),
-      ).rejects.toMatchObject({ statusCode: 409, code: 'INVOICE_HAS_PAYMENTS' });
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'INVOICE_HAS_PAYMENTS',
+      });
     });
   });
 });

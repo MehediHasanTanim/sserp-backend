@@ -44,14 +44,20 @@ export class TherapyOpsJob {
         );
         totalCreated += result.created;
         if (result.skipped.length) {
-          this.logger.warn(`Recurrence ${rec.id}: skipped ${result.skipped.length} conflict(s)`);
+          this.logger.warn(
+            `Recurrence ${rec.id}: skipped ${result.skipped.length} conflict(s)`,
+          );
         }
       } catch (err: any) {
-        this.logger.error(`Failed to materialise recurrence ${rec.id}: ${err.message}`);
+        this.logger.error(
+          `Failed to materialise recurrence ${rec.id}: ${err.message}`,
+        );
       }
     }
 
-    this.logger.log(`Recurrence materialisation complete: ${totalCreated} sessions created`);
+    this.logger.log(
+      `Recurrence materialisation complete: ${totalCreated} sessions created`,
+    );
   }
 
   /** Nightly: auto-mark no-show for past scheduled sessions */

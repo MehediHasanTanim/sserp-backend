@@ -45,7 +45,11 @@ export class TreatmentPlanService {
   async create(dto: CreateTreatmentPlanDto, createdByTherapistId: string) {
     // Check for existing active plan
     const existing = await this.prisma.treatmentPlan.findFirst({
-      where: { patientId: dto.patientId, therapyType: dto.therapyType, status: 'active' },
+      where: {
+        patientId: dto.patientId,
+        therapyType: dto.therapyType,
+        status: 'active',
+      },
     });
     if (existing) {
       throw new DomainException(
@@ -122,14 +126,19 @@ export class TreatmentPlanService {
       data: { status: 'active' },
     });
 
-    this.events.emit(EventNames.TREATMENT_PLAN_ACTIVATED, { planId, patientId: plan.patientId });
+    this.events.emit(EventNames.TREATMENT_PLAN_ACTIVATED, {
+      planId,
+      patientId: plan.patientId,
+    });
     return updated;
   }
 
   async shareWithGuardian(planId: string) {
     const plan = await this.findById(planId);
     if (plan.status !== 'active') {
-      throw DomainException.validation('Only active plans can be shared with guardian');
+      throw DomainException.validation(
+        'Only active plans can be shared with guardian',
+      );
     }
 
     const updated = await this.prisma.treatmentPlan.update({
@@ -137,7 +146,10 @@ export class TreatmentPlanService {
       data: { sharedWithGuardianAt: new Date() },
     });
 
-    this.events.emit(EventNames.TREATMENT_PLAN_SHARED, { planId, patientId: plan.patientId });
+    this.events.emit(EventNames.TREATMENT_PLAN_SHARED, {
+      planId,
+      patientId: plan.patientId,
+    });
     return updated;
   }
 

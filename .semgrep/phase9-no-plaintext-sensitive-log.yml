@@ -1,0 +1,13 @@
+rules:
+  - id: phase9-no-plaintext-medical-log
+    languages: [typescript]
+    message: Do not log medical or financial field names without scrubbing
+    severity: WARNING
+    patterns:
+      - pattern: console.log($X)
+      - metavariable-regex:
+          metavariable: $X
+          regex: .*(allergies|medications|nationalId|basicSalary|bankDetails).*
+    paths:
+      include:
+        - src/modules/**

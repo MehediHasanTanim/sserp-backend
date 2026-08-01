@@ -237,7 +237,11 @@ export class ProgressReportService {
 
     const updated = await this.prisma.progressReport.update({
       where: { id },
-      data: { status: 'submitted', submittedBy: actorId, submittedAt: new Date() },
+      data: {
+        status: 'submitted',
+        submittedBy: actorId,
+        submittedAt: new Date(),
+      },
       include: REPORT_INCLUDE,
     });
 

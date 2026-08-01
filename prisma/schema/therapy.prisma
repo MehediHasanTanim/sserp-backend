@@ -235,6 +235,8 @@ model TherapyRecurrence {
   room                String?
   startDate           DateTime            @map("start_date") @db.Date
   endDate             DateTime?           @map("end_date") @db.Date
+  /// Stop generating after this many sessions (alongside endDate + safety cap).
+  endAfterSessions    Int?                @map("end_after_sessions")
   status              RecurrenceStatus    @default(active)
   generatedUntil      DateTime?           @map("generated_until") @db.Date
   parentRecurrenceId  String?             @map("parent_recurrence_id") @db.Uuid

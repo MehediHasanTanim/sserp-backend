@@ -1,0 +1,13 @@
+{
+  "title": "SSERP API Overview",
+  "panels": [
+    { "title": "HTTP p95", "type": "timeseries", "targets": ["histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))"] },
+    { "title": "Error rate", "type": "timeseries", "targets": ["sum(rate(http_request_duration_seconds_count{status=~\"5..\"}[5m]))"] },
+    { "title": "Queue depth", "type": "timeseries", "targets": ["sserp_queue_depth"] }
+  ],
+  "alertRules": [
+    { "name": "p95_latency", "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.8", "for": "5m" },
+    { "name": "error_rate", "expr": "sum(rate(http_request_duration_seconds_count{status=~\"5..\"}[5m])) / sum(rate(http_request_duration_seconds_count[5m])) > 0.01", "for": "5m" },
+    { "name": "backup_verify_failed", "expr": "sserp_backup_verify_failed > 0", "for": "1m" }
+  ]
+}

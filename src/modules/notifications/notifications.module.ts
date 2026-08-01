@@ -1,98 +1,116 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Injectable } from '@nestjs/common';
-import { Module } from '@nestjs/common';
-import { PrismaService } from '../../shared/prisma/prisma.service';
-import { CurrentUser, AuthUser } from '../../shared/decorators';
-import { DomainException } from '../../shared/errors/domain-exception';
-
-@Injectable()
-export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  async list(userId: string, unreadOnly?: boolean, page = 1, pageSize = 20) {
-    const where = {
-      userId,
-      ...(unreadOnly ? { readAt: null } : {}),
-    };
-    const [total, items] = await this.prisma.$transaction([
-      this.prisma.notification.count({ where }),
-      this.prisma.notification.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-    ]);
-    return { items, page, pageSize, total };
-  }
-
-  async unreadCount(userId: string) {
-    const count = await this.prisma.notification.count({
-      where: { userId, readAt: null },
-    });
-    return { count };
-  }
-
-  async markRead(userId: string, id: string) {
-    const n = await this.prisma.notification.findFirst({
-      where: { id, userId },
-    });
-    if (!n) throw DomainException.notFound('Notification not found');
-    return this.prisma.notification.update({
-      where: { id },
-      data: { readAt: new Date() },
-    });
-  }
-
-  async markAllRead(userId: string) {
-    await this.prisma.notification.updateMany({
-      where: { userId, readAt: null },
-      data: { readAt: new Date() },
-    });
-    return { ok: true };
-  }
-}
-
-@ApiTags('notifications')
-@ApiBearerAuth()
-@Controller('notifications')
-export class NotificationsController {
-  constructor(private readonly notifications: NotificationsService) {}
-
-  @Get()
-  list(
-    @CurrentUser() user: AuthUser,
-    @Query('unread') unread?: string,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-  ) {
-    return this.notifications.list(
-      user.id,
-      unread === 'true',
-      page ? Number(page) : 1,
-      pageSize ? Number(pageSize) : 20,
-    );
-  }
-
-  @Get('unread-count')
-  unread(@CurrentUser() user: AuthUser) {
-    return this.notifications.unreadCount(user.id);
-  }
-
-  @Post(':id/read')
-  markRead(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.notifications.markRead(user.id, id);
-  }
-
-  @Post('read-all')
-  markAll(@CurrentUser() user: AuthUser) {
-    return this.notifications.markAllRead(user.id);
-  }
-}
+import { Module, forwardRef } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
+import { JwtModule } from '@nestjs/jwt';
+import { AuthModule } from '../auth/auth.module';
+import { NotificationPort } from '../../shared/ports/notification.port';
+import { MultiChannelNotificationAdapter } from './adapters/multi-channel-notification.adapter';
+import { NotificationsController } from './controllers/notification.controller';
+import { NotificationAdminController } from './controllers/notification-admin.controller';
+import {
+  DeliveryLogController,
+  SuppressionListController,
+} from './controllers/delivery-log.controller';
+import { MessageController } from './controllers/message.controller';
+import { AnnouncementController } from './controllers/announcement.controller';
+import { NoticeBoardController } from './controllers/notice-board.controller';
+import {
+  ApprovalChainController,
+  ReminderScheduleController,
+} from './controllers/workflow.controller';
+import { NotificationsService } from './services/notification.service';
+import { ChannelRouterService } from './services/channel-router.service';
+import { TemplateRendererService } from './services/template-renderer.service';
+import { RecipientResolverService } from './services/recipient-resolver.service';
+import { DeliveryLogService } from './services/delivery-log.service';
+import { DigestService } from './services/digest.service';
+import { MessageService } from './services/message.service';
+import { AnnouncementService } from './services/announcement.service';
+import { NoticeBoardService } from './services/notice-board.service';
+import { ApprovalChainService } from './services/approval-chain.service';
+import { ReminderScheduleService } from './services/reminder-schedule.service';
+import { DomainEventListener } from './listeners/domain-event.listener';
+import { NodemailerProvider } from './providers/email/nodemailer.provider';
+import { ConsoleSmsProvider } from './providers/sms/console.provider';
+import { SslWirelessSmsProvider } from './providers/sms/ssl-wireless.provider';
+import { SmsProviderFactory } from './providers/sms/sms-provider.factory';
+import { EmailDispatchJob } from './jobs/email-dispatch.job';
+import { SmsDispatchJob } from './jobs/sms-dispatch.job';
+import { DigestDispatchJob } from './jobs/digest-dispatch.job';
+import { DeliveryStatusPollJob } from './jobs/delivery-status-poll.job';
+import { NotificationCleanupJob } from './jobs/notification-cleanup.job';
+import { ReminderDispatchJob } from './jobs/reminder-dispatch.job';
+import { ApprovalEscalationJob } from './jobs/approval-escalation.job';
+import { SocketSessionPruneJob } from './jobs/socket-session-prune.job';
+import {
+  RealtimeGateway,
+  RealtimeGatewayProvider,
+} from './gateway/realtime.gateway';
+import { WsJwtGuard } from './gateway/ws-jwt.guard';
+import { RoomResolverService } from './gateway/room-resolver.service';
+import { PresenceService } from './gateway/presence.service';
+import { EMAIL_PROVIDER } from './constants';
 
 @Module({
-  controllers: [NotificationsController],
-  providers: [NotificationsService],
+  imports: [
+    BullModule.registerQueue(
+      { name: 'email' },
+      { name: 'sms' },
+      { name: 'notifications' },
+    ),
+    JwtModule.register({}),
+    AuthModule,
+  ],
+  controllers: [
+    NotificationsController,
+    NotificationAdminController,
+    DeliveryLogController,
+    SuppressionListController,
+    MessageController,
+    AnnouncementController,
+    NoticeBoardController,
+    ApprovalChainController,
+    ReminderScheduleController,
+  ],
+  providers: [
+    NotificationsService,
+    ChannelRouterService,
+    TemplateRendererService,
+    RecipientResolverService,
+    DeliveryLogService,
+    DigestService,
+    MessageService,
+    AnnouncementService,
+    NoticeBoardService,
+    ApprovalChainService,
+    ReminderScheduleService,
+    DomainEventListener,
+    MultiChannelNotificationAdapter,
+    { provide: NotificationPort, useExisting: MultiChannelNotificationAdapter },
+    { provide: EMAIL_PROVIDER, useClass: NodemailerProvider },
+    NodemailerProvider,
+    ConsoleSmsProvider,
+    SslWirelessSmsProvider,
+    SmsProviderFactory,
+    EmailDispatchJob,
+    SmsDispatchJob,
+    DigestDispatchJob,
+    DeliveryStatusPollJob,
+    NotificationCleanupJob,
+    ReminderDispatchJob,
+    ApprovalEscalationJob,
+    SocketSessionPruneJob,
+    RealtimeGateway,
+    RealtimeGatewayProvider,
+    WsJwtGuard,
+    RoomResolverService,
+    PresenceService,
+  ],
+  exports: [
+    NotificationsService,
+    MultiChannelNotificationAdapter,
+    NotificationPort,
+    ApprovalChainService,
+    RealtimeGateway,
+  ],
 })
 export class NotificationsModule {}

@@ -21,7 +21,10 @@ export class StatementsController {
 
   @Get('balance-sheet')
   @Roles('accountant', 'principal', 'super_admin')
-  balanceSheet(@Query('asOf') asOf: string, @Query('costCenter') costCenter?: string) {
+  balanceSheet(
+    @Query('asOf') asOf: string,
+    @Query('costCenter') costCenter?: string,
+  ) {
     return this.statements.balanceSheet(new Date(asOf), costCenter);
   }
 
@@ -33,7 +36,13 @@ export class StatementsController {
 
   @Get('cost-center-profitability')
   @Roles('accountant', 'principal', 'super_admin')
-  costCenterProfitability(@Query('from') from: string, @Query('to') to: string) {
-    return this.statements.costCenterProfitability(new Date(from), new Date(to));
+  costCenterProfitability(
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.statements.costCenterProfitability(
+      new Date(from),
+      new Date(to),
+    );
   }
 }

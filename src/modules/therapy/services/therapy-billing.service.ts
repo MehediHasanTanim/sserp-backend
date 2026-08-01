@@ -97,17 +97,25 @@ export class TherapyBillingService {
       where: { id: sessionId },
     });
     if (!session) throw DomainException.notFound('Session not found');
-    if (session.status !== 'completed') throw DomainException.validation('Session must be completed to generate invoice');
+    if (session.status !== 'completed')
+      throw DomainException.validation(
+        'Session must be completed to generate invoice',
+      );
 
     if (!session.patientId) {
-      throw DomainException.validation('Session has no associated patient for billing');
+      throw DomainException.validation(
+        'Session has no associated patient for billing',
+      );
     }
 
     // Check for existing invoice on this session
     const existingLine = await this.prisma.therapyInvoiceLine.findFirst({
       where: { sessionId },
     });
-    if (existingLine) throw DomainException.conflict('Invoice already generated for this session');
+    if (existingLine)
+      throw DomainException.conflict(
+        'Invoice already generated for this session',
+      );
 
     const amount = await this.resolveFee(
       session.therapyType,
@@ -116,7 +124,8 @@ export class TherapyBillingService {
       session.groupId,
     );
 
-    const invoiceNumber = await this.numberingService.nextCode('therapy_invoice');
+    const invoiceNumber =
+      await this.numberingService.nextCode('therapy_invoice');
 
     const invoice = await this.prisma.$transaction(async (tx) => {
       const inv = await tx.therapyInvoice.create({
@@ -169,7 +178,12 @@ export class TherapyBillingService {
     return invoice;
   }
 
-  async generateMonthlyConsolidated(patientId: string, month: number, year: number, createdBy: string) {
+  async generateMonthlyConsolidated(
+    patientId: string,
+    month: number,
+    year: number,
+    createdBy: string,
+  ) {
     // Get all completed sessions in the period without existing invoice lines
     const periodStart = new Date(Date.UTC(year, month - 1, 1));
     const periodEnd = new Date(Date.UTC(year, month, 1));
@@ -185,12 +199,18 @@ export class TherapyBillingService {
 
     if (!sessions.length) return null;
 
-    const invoiceNumber = await this.numberingService.nextCode('therapy_invoice');
+    const invoiceNumber =
+      await this.numberingService.nextCode('therapy_invoice');
 
     const lines = await Promise.all(
       sessions.map(async (s) => ({
         session: s,
-        amount: await this.resolveFee(s.therapyType, s.sessionMode, s.durationMinutesActual ?? s.durationMinutesPlanned, s.groupId),
+        amount: await this.resolveFee(
+          s.therapyType,
+          s.sessionMode,
+          s.durationMinutesActual ?? s.durationMinutesPlanned,
+          s.groupId,
+        ),
       })),
     );
 
@@ -242,13 +262,19 @@ export class TherapyBillingService {
       where: { id: dto.invoiceId },
     });
     if (!invoice) throw DomainException.notFound('Invoice not found');
-    if (invoice.status === 'cancelled') throw DomainException.conflict('Invoice is cancelled');
+    if (invoice.status === 'cancelled')
+      throw DomainException.conflict('Invoice is cancelled');
 
     if (dto.amount > invoice.outstandingAmount) {
-      throw new DomainException(ErrorCode.OVERPAYMENT, 422, 'Payment exceeds outstanding amount');
+      throw new DomainException(
+        ErrorCode.OVERPAYMENT,
+        422,
+        'Payment exceeds outstanding amount',
+      );
     }
 
-    const receiptNumber = await this.numberingService.nextCode('therapy_receipt');
+    const receiptNumber =
+      await this.numberingService.nextCode('therapy_receipt');
 
     const payment = await this.prisma.$transaction(async (tx) => {
       const p = await tx.therapyPayment.create({
@@ -290,7 +316,11 @@ export class TherapyBillingService {
       debitAccountCode: '1120',
       creditAccountCode: '1220',
       postingDate: new Date(),
-      payload: { patientId: invoice.patientId, paymentMethod: dto.method, variant: dto.method },
+      payload: {
+        patientId: invoice.patientId,
+        paymentMethod: dto.method,
+        variant: dto.method,
+      },
     });
 
     this.events.emit(EventNames.THERAPY_PAYMENT_RECEIVED, {
@@ -308,7 +338,8 @@ export class TherapyBillingService {
       where: { id: paymentId },
     });
     if (!payment) throw DomainException.notFound('Payment not found');
-    if (payment.status === 'reversed') throw DomainException.conflict('Payment already reversed');
+    if (payment.status === 'reversed')
+      throw DomainException.conflict('Payment already reversed');
 
     await this.prisma.$transaction(async (tx) => {
       await tx.therapyPayment.update({
@@ -334,7 +365,10 @@ export class TherapyBillingService {
       });
     });
 
-    this.events.emit(EventNames.THERAPY_PAYMENT_REVERSED, { paymentId, reversedBy });
+    this.events.emit(EventNames.THERAPY_PAYMENT_REVERSED, {
+      paymentId,
+      reversedBy,
+    });
   }
 
   async applyDiscount(dto: ApplyDiscountDto) {
@@ -349,7 +383,8 @@ export class TherapyBillingService {
           ? Math.round(invoice.grossAmount * (dto.value / 100))
           : dto.value;
 
-      const newNet = invoice.grossAmount - invoice.discountAmount - discountAmount;
+      const newNet =
+        invoice.grossAmount - invoice.discountAmount - discountAmount;
 
       await this.prisma.$transaction(async (tx) => {
         await tx.therapyDiscount.create({

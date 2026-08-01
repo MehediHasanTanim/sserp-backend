@@ -10,7 +10,10 @@ import { EventNames } from '../../../shared/events/event-names';
 import { NumberingService } from '../../admin/services/organization.service';
 import { LedgerPort } from '../../../shared/ports/ledger.port';
 import { FeeStructureService } from './fee-structure.service';
-import { CancelInvoiceDto, GenerateMonthlyInvoicesDto } from '../dto/fee-invoice.dto';
+import {
+  CancelInvoiceDto,
+  GenerateMonthlyInvoicesDto,
+} from '../dto/fee-invoice.dto';
 
 export interface StructureLine {
   feeHeadId: string;
@@ -163,7 +166,10 @@ export class FeeInvoiceService {
 
     for (const student of students) {
       if (student.status !== 'active') {
-        skipped.push({ studentId: student.id, reason: `not_active:${student.status}` });
+        skipped.push({
+          studentId: student.id,
+          reason: `not_active:${student.status}`,
+        });
         continue;
       }
 

@@ -35,7 +35,8 @@ export class ChequeController {
   @Roles('accountant')
   updateStatus(
     @Param('id') id: string,
-    @Body() body: { status: ChequeStatus; reason?: string; clearedDate?: string },
+    @Body()
+    body: { status: ChequeStatus; reason?: string; clearedDate?: string },
   ) {
     return this.cheques.transitionStatus(id, body.status, {
       reason: body.reason,

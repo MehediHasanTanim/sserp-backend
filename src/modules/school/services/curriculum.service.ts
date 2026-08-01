@@ -101,10 +101,7 @@ export class CurriculumService {
     });
   }
 
-  async addObjective(
-    curriculumId: string,
-    input: CreateLearningObjectiveDto,
-  ) {
+  async addObjective(curriculumId: string, input: CreateLearningObjectiveDto) {
     await this.getCurriculum(curriculumId);
     const skillDomain = await this.prisma.skillDomain.findUnique({
       where: { id: input.skillDomainId },

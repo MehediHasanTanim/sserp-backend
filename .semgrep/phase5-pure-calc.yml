@@ -1,0 +1,13 @@
+rules:
+  - id: phase5-pure-calc-no-prisma-import
+    languages: [typescript]
+    message: Pure calculation services must not import PrismaService or @prisma/client.
+    severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern-regex: from ['"]@prisma/client['"]
+          - pattern-regex: PrismaService
+    paths:
+      include:
+        - src/modules/hr/services/payroll-calculation.service.ts
+        - src/modules/hr/services/gratuity-calculation.service.ts

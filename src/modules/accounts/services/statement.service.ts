@@ -30,9 +30,21 @@ export class StatementService {
       if (net === 0) continue;
       if (account.accountType === 'revenue') revenue += net;
       else expense += net;
-      lines.push({ accountCode: account.accountCode, accountName: account.accountName, amount: net });
+      lines.push({
+        accountCode: account.accountCode,
+        accountName: account.accountName,
+        amount: net,
+      });
     }
-    return { from, to, costCenter, revenue, expense, netProfit: revenue - expense, lines };
+    return {
+      from,
+      to,
+      costCenter,
+      revenue,
+      expense,
+      netProfit: revenue - expense,
+      lines,
+    };
   }
 
   async balanceSheet(asOf: Date, costCenter?: string) {
@@ -41,7 +53,10 @@ export class StatementService {
       where: { accountType: { in: types }, isGroup: false, isActive: true },
     });
     const sections = { assets: 0, liabilities: 0, equity: 0 };
-    const lines: Record<string, Array<{ code: string; name: string; amount: number }>> = {
+    const lines: Record<
+      string,
+      Array<{ code: string; name: string; amount: number }>
+    > = {
       assets: [],
       liabilities: [],
       equity: [],
@@ -56,11 +71,15 @@ export class StatementService {
         _sum: { debitAmount: true, creditAmount: true },
       });
       const opening =
-        account.normalBalance === 'debit' ? account.openingBalance : -account.openingBalance;
+        account.normalBalance === 'debit'
+          ? account.openingBalance
+          : -account.openingBalance;
       const balance =
         account.normalBalance === 'debit'
           ? opening + (agg._sum.debitAmount ?? 0) - (agg._sum.creditAmount ?? 0)
-          : opening + (agg._sum.creditAmount ?? 0) - (agg._sum.debitAmount ?? 0);
+          : opening +
+            (agg._sum.creditAmount ?? 0) -
+            (agg._sum.debitAmount ?? 0);
       if (balance === 0) continue;
       const key =
         account.accountType === 'asset'
@@ -69,14 +88,24 @@ export class StatementService {
             ? 'liabilities'
             : 'equity';
       sections[key] += balance;
-      lines[key].push({ code: account.accountCode, name: account.accountName, amount: balance });
+      lines[key].push({
+        code: account.accountCode,
+        name: account.accountName,
+        amount: balance,
+      });
     }
     const yearStart = new Date(Date.UTC(asOf.getUTCFullYear(), 0, 1));
     const pnl = await this.pnl(yearStart, asOf, costCenter);
     sections.equity += pnl.netProfit;
     const balanced =
       Math.abs(sections.assets - (sections.liabilities + sections.equity)) < 1;
-    return { asOf, sections, lines, currentPeriodProfit: pnl.netProfit, balanced };
+    return {
+      asOf,
+      sections,
+      lines,
+      currentPeriodProfit: pnl.netProfit,
+      balanced,
+    };
   }
 
   /** Indirect method stub — reconciles net profit to cash movement. */
@@ -97,7 +126,8 @@ export class StatementService {
         },
         _sum: { debitAmount: true, creditAmount: true },
       });
-      cashMovement += (agg._sum.debitAmount ?? 0) - (agg._sum.creditAmount ?? 0);
+      cashMovement +=
+        (agg._sum.debitAmount ?? 0) - (agg._sum.creditAmount ?? 0);
     }
     const reconciliationDifference = cashMovement - pnl.netProfit;
     return {
@@ -123,7 +153,12 @@ export class StatementService {
     for (const { costCenter } of centers) {
       if (!costCenter) continue;
       const pnl = await this.pnl(from, to, costCenter);
-      results.push({ costCenter, netProfit: pnl.netProfit, revenue: pnl.revenue, expense: pnl.expense });
+      results.push({
+        costCenter,
+        netProfit: pnl.netProfit,
+        revenue: pnl.revenue,
+        expense: pnl.expense,
+      });
     }
     return results;
   }

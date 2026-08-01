@@ -30,7 +30,8 @@ export class CreateBehaviorSupportPlanDto {
 
 export class UpdateBehaviorSupportPlanDto {
   @IsOptional() @IsDateString() reviewDate?: string;
-  @IsOptional() @IsObject() targetBehaviors?: Record<string, unknown> | unknown[];
+  @IsOptional() @IsObject() targetBehaviors?:
+    Record<string, unknown> | unknown[];
   @IsOptional() @IsObject() strategies?: Record<string, unknown> | unknown[];
   @IsOptional() @IsString() status?: 'active' | 'archived';
 }

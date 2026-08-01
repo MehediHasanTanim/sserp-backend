@@ -77,122 +77,127 @@ export class ActivityEnrollmentService {
     input: RespondInput,
     actor: RespondActorContext,
   ): Promise<ActivityEnrollment> {
-    const outcome = await this.prisma.$transaction<RespondOutcome>(async (tx) => {
-      const activity = await tx.outdoorActivity.findUnique({
-        where: { id: activityId },
-      });
-      if (!activity) throw DomainException.notFound('Activity not found');
-      if (activity.status === 'cancelled') {
-        throw DomainException.conflict('Activity has been cancelled');
-      }
+    const outcome = await this.prisma.$transaction<RespondOutcome>(
+      async (tx) => {
+        const activity = await tx.outdoorActivity.findUnique({
+          where: { id: activityId },
+        });
+        if (!activity) throw DomainException.notFound('Activity not found');
+        if (activity.status === 'cancelled') {
+          throw DomainException.conflict('Activity has been cancelled');
+        }
 
-      const student = await tx.student.findFirst({
-        where: { id: studentId, deletedAt: null },
-      });
-      if (!student) throw DomainException.notFound('Student not found');
-      if (student.status !== 'active') {
-        throw DomainException.withCode(
-          ErrorCode.STUDENT_NOT_ACTIVE,
-          422,
-          'Only active students may be enrolled in an activity',
-        );
-      }
+        const student = await tx.student.findFirst({
+          where: { id: studentId, deletedAt: null },
+        });
+        if (!student) throw DomainException.notFound('Student not found');
+        if (student.status !== 'active') {
+          throw DomainException.withCode(
+            ErrorCode.STUDENT_NOT_ACTIVE,
+            422,
+            'Only active students may be enrolled in an activity',
+          );
+        }
 
-      if (input.decision === 'confirm' && new Date() > activity.optInDeadline) {
-        throw DomainException.withCode(
-          ErrorCode.OPTIN_CLOSED,
-          409,
-          'The opt-in deadline for this activity has passed',
-        );
-      }
+        if (
+          input.decision === 'confirm' &&
+          new Date() > activity.optInDeadline
+        ) {
+          throw DomainException.withCode(
+            ErrorCode.OPTIN_CLOSED,
+            409,
+            'The opt-in deadline for this activity has passed',
+          );
+        }
 
-      // Lock all enrollment rows for this activity to serialize
-      // capacity/waitlist assignment across concurrent opt-ins.
-      await tx.$queryRaw`
+        // Lock all enrollment rows for this activity to serialize
+        // capacity/waitlist assignment across concurrent opt-ins.
+        await tx.$queryRaw`
         SELECT id FROM activity_enrollments
         WHERE activity_id = ${activityId}::uuid
         FOR UPDATE
       `;
 
-      const existing = await tx.activityEnrollment.findUnique({
-        where: { activityId_studentId: { activityId, studentId } },
-      });
+        const existing = await tx.activityEnrollment.findUnique({
+          where: { activityId_studentId: { activityId, studentId } },
+        });
 
-      if (input.decision === 'decline') {
-        const wasConfirmed = existing?.enrollmentState === 'confirmed';
+        if (input.decision === 'decline') {
+          const wasConfirmed = existing?.enrollmentState === 'confirmed';
+          const enrollment = await tx.activityEnrollment.upsert({
+            where: { activityId_studentId: { activityId, studentId } },
+            create: {
+              activityId,
+              studentId,
+              consentStatus: 'declined',
+              consentRecordedAt: new Date(),
+              consentChannel: actor.channel,
+              consentRecordedBy: actor.userId,
+              declinedReason: input.reason,
+              enrollmentState: 'declined',
+            },
+            update: {
+              consentStatus: 'declined',
+              consentRecordedAt: new Date(),
+              consentChannel: actor.channel,
+              consentRecordedBy: actor.userId,
+              declinedReason: input.reason,
+              enrollmentState: 'declined',
+              waitlistPosition: null,
+            },
+          });
+          const promoted = wasConfirmed
+            ? await this.promoteFromWaitlist(tx, activityId)
+            : null;
+          await this.syncParticipantCount(tx, activityId);
+          return { kind: 'declined', enrollment, promoted };
+        }
+
+        const confirmedCount = await tx.activityEnrollment.count({
+          where: { activityId, enrollmentState: 'confirmed' },
+        });
+        const hasCapacity = confirmedCount < activity.capacity;
+
+        let waitlistPosition: number | null = null;
+        if (!hasCapacity) {
+          const maxPosition = await tx.activityEnrollment.aggregate({
+            where: { activityId, enrollmentState: 'waitlisted' },
+            _max: { waitlistPosition: true },
+          });
+          waitlistPosition = (maxPosition._max.waitlistPosition ?? 0) + 1;
+        }
+
+        const enrollmentState = hasCapacity ? 'confirmed' : 'waitlisted';
         const enrollment = await tx.activityEnrollment.upsert({
           where: { activityId_studentId: { activityId, studentId } },
           create: {
             activityId,
             studentId,
-            consentStatus: 'declined',
+            consentStatus: 'confirmed',
             consentRecordedAt: new Date(),
             consentChannel: actor.channel,
             consentRecordedBy: actor.userId,
-            declinedReason: input.reason,
-            enrollmentState: 'declined',
+            enrollmentState,
+            waitlistPosition,
           },
           update: {
-            consentStatus: 'declined',
+            consentStatus: 'confirmed',
             consentRecordedAt: new Date(),
             consentChannel: actor.channel,
             consentRecordedBy: actor.userId,
-            declinedReason: input.reason,
-            enrollmentState: 'declined',
-            waitlistPosition: null,
+            declinedReason: null,
+            enrollmentState,
+            waitlistPosition,
           },
         });
-        const promoted = wasConfirmed
-          ? await this.promoteFromWaitlist(tx, activityId)
-          : null;
-        await this.syncParticipantCount(tx, activityId);
-        return { kind: 'declined', enrollment, promoted };
-      }
-
-      const confirmedCount = await tx.activityEnrollment.count({
-        where: { activityId, enrollmentState: 'confirmed' },
-      });
-      const hasCapacity = confirmedCount < activity.capacity;
-
-      let waitlistPosition: number | null = null;
-      if (!hasCapacity) {
-        const maxPosition = await tx.activityEnrollment.aggregate({
-          where: { activityId, enrollmentState: 'waitlisted' },
-          _max: { waitlistPosition: true },
-        });
-        waitlistPosition = (maxPosition._max.waitlistPosition ?? 0) + 1;
-      }
-
-      const enrollmentState = hasCapacity ? 'confirmed' : 'waitlisted';
-      const enrollment = await tx.activityEnrollment.upsert({
-        where: { activityId_studentId: { activityId, studentId } },
-        create: {
-          activityId,
-          studentId,
-          consentStatus: 'confirmed',
-          consentRecordedAt: new Date(),
-          consentChannel: actor.channel,
-          consentRecordedBy: actor.userId,
-          enrollmentState,
-          waitlistPosition,
-        },
-        update: {
-          consentStatus: 'confirmed',
-          consentRecordedAt: new Date(),
-          consentChannel: actor.channel,
-          consentRecordedBy: actor.userId,
-          declinedReason: null,
-          enrollmentState,
-          waitlistPosition,
-        },
-      });
-      if (hasCapacity) {
-        await this.syncParticipantCount(tx, activityId);
-      }
-      return hasCapacity
-        ? { kind: 'confirmed', enrollment }
-        : { kind: 'waitlisted', enrollment };
-    });
+        if (hasCapacity) {
+          await this.syncParticipantCount(tx, activityId);
+        }
+        return hasCapacity
+          ? { kind: 'confirmed', enrollment }
+          : { kind: 'waitlisted', enrollment };
+      },
+    );
 
     await this.emitOutcomeEvents(activityId, studentId, outcome);
     return outcome.enrollment;

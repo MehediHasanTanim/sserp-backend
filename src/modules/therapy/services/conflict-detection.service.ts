@@ -17,7 +17,11 @@ export interface ConflictResult {
 }
 
 export interface ConflictEntry {
-  type: 'therapist_double_booking' | 'patient_double_booking' | 'room_conflict' | 'leave_conflict';
+  type:
+    | 'therapist_double_booking'
+    | 'patient_double_booking'
+    | 'room_conflict'
+    | 'leave_conflict';
   sessionId?: string;
   therapistId?: string;
   patientId?: string;
@@ -39,7 +43,13 @@ export class ConflictDetectionService {
     const blocking: ConflictEntry[] = [];
     const warnings: ConflictEntry[] = [];
 
-    const { therapistId, patientId, scheduledStart, scheduledEnd, excludeSessionId } = input;
+    const {
+      therapistId,
+      patientId,
+      scheduledStart,
+      scheduledEnd,
+      excludeSessionId,
+    } = input;
 
     const baseWhere = {
       id: excludeSessionId ? { not: excludeSessionId } : undefined,

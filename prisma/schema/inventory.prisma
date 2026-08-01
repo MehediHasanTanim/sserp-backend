@@ -1,0 +1,424 @@
+// Phase 6 — Inventory, Assets, Inventory Audit
+
+model ItemCategory {
+  id                   String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 String
+  parentId             String? @map("parent_id") @db.Uuid
+  isAssetCategory      Boolean @default(false) @map("is_asset_category")
+  defaultCoaExpenseCode String? @map("default_coa_expense_code") @db.VarChar(20)
+  defaultCoaAssetCode  String? @map("default_coa_asset_code") @db.VarChar(20)
+  isActive             Boolean @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  parent   ItemCategory?  @relation("ItemCategoryHierarchy", fields: [parentId], references: [id])
+  children ItemCategory[] @relation("ItemCategoryHierarchy")
+  items    Item[]
+
+  @@map("item_categories")
+}
+
+model UnitOfMeasure {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code           String  @unique
+  name           String
+  allowsFraction Boolean @default(false) @map("allows_fraction")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  items                 Item[]
+  purchaseRequestLines  PurchaseRequestLine[]
+  purchaseOrderLines    PurchaseOrderLine[]
+
+  @@map("units_of_measure")
+}
+
+model Item {
+  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemCode           String          @unique @map("item_code")
+  name               String
+  description        String?
+  categoryId         String          @map("category_id") @db.Uuid
+  unitOfMeasureId    String          @map("unit_of_measure_id") @db.Uuid
+  itemNature         ItemNature      @map("item_nature")
+  valuationMethod    ValuationMethod @map("valuation_method")
+  minimumStockLevel  Decimal         @default(0) @map("minimum_stock_level") @db.Decimal(14, 3)
+  reorderQuantity    Decimal         @default(0) @map("reorder_quantity") @db.Decimal(14, 3)
+  maximumStockLevel  Decimal?        @map("maximum_stock_level") @db.Decimal(14, 3)
+  tracksExpiry       Boolean         @default(false) @map("tracks_expiry")
+  tracksSerial       Boolean         @default(false) @map("tracks_serial")
+  manufacturer       String?
+  brand              String?
+  model              String?
+  photoAttachmentId  String?         @map("photo_attachment_id") @db.Uuid
+  standardCost       Int?            @map("standard_cost")
+  isActive           Boolean         @default(true) @map("is_active")
+  deletedAt          DateTime?       @map("deleted_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  category               ItemCategory            @relation(fields: [categoryId], references: [id])
+  unitOfMeasure          UnitOfMeasure           @relation(fields: [unitOfMeasureId], references: [id])
+  stockMovements         StockMovement[]
+  stockLevels            StockLevel[]
+  stockBatches           StockBatch[]
+  stockIssueRequestLines StockIssueRequestLine[]
+  stockAdjustmentLines   StockAdjustmentLine[]
+  assets                 Asset[]
+  inventoryAuditLines    InventoryAuditLine[]
+  purchaseRequestLines   PurchaseRequestLine[]
+  purchaseOrderLines     PurchaseOrderLine[]
+  grnLines               GrnLine[]
+
+  @@index([itemCode])
+  @@index([categoryId, isActive])
+  @@map("items")
+}
+
+model Location {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  locationType LocationType @map("location_type")
+  department   String?
+  parentId     String?      @map("parent_id") @db.Uuid
+  isActive     Boolean      @default(true) @map("is_active")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  parent              Location?            @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children            Location[]           @relation("LocationHierarchy")
+  stockMovements      StockMovement[]      @relation("MovementLocation")
+  counterMovements    StockMovement[]      @relation("MovementCounterLocation")
+  stockLevels         StockLevel[]
+  stockBatches        StockBatch[]
+  stockIssueRequests  StockIssueRequest[]
+  stockAdjustments    StockAdjustment[]
+  assets              Asset[]
+  inventoryAuditLines InventoryAuditLine[]
+  goodsReceiptNotes   GoodsReceiptNote[]
+
+  @@map("locations")
+}
+
+model StockMovement {
+  id                 String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  movementNumber     String                     @unique @map("movement_number")
+  itemId             String                     @map("item_id") @db.Uuid
+  locationId         String                     @map("location_id") @db.Uuid
+  counterLocationId  String?                    @map("counter_location_id") @db.Uuid
+  movementType       StockMovementType          @map("movement_type")
+  quantity           Decimal                    @db.Decimal(14, 3)
+  unitCost           Int                        @map("unit_cost")
+  totalCost          Int                        @map("total_cost")
+  batchNumber        String?                    @map("batch_number")
+  expiryDate         DateTime?                  @map("expiry_date") @db.Date
+  serialNumber       String?                    @map("serial_number")
+  referenceType      StockMovementReferenceType @map("reference_type")
+  referenceId        String?                    @map("reference_id") @db.Uuid
+  movementDate       DateTime                   @map("movement_date") @db.Date
+  journalId          String?                    @map("journal_id") @db.Uuid
+  remarks            String?
+  createdBy          String                     @map("created_by") @db.Uuid
+  createdAt          DateTime                   @default(now()) @map("created_at")
+
+  item             Item      @relation(fields: [itemId], references: [id])
+  location         Location  @relation("MovementLocation", fields: [locationId], references: [id])
+  counterLocation  Location? @relation("MovementCounterLocation", fields: [counterLocationId], references: [id])
+
+  @@index([itemId, movementDate])
+  @@index([locationId, movementDate])
+  @@index([referenceType, referenceId])
+  @@map("stock_movements")
+}
+
+model StockLevel {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId           String    @map("item_id") @db.Uuid
+  locationId       String    @map("location_id") @db.Uuid
+  quantityOnHand   Decimal   @default(0) @map("quantity_on_hand") @db.Decimal(14, 3)
+  quantityReserved Decimal   @default(0) @map("quantity_reserved") @db.Decimal(14, 3)
+  averageCost      Int       @default(0) @map("average_cost")
+  lastMovementAt   DateTime? @map("last_movement_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  item     Item     @relation(fields: [itemId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([itemId, locationId])
+  @@index([itemId, locationId])
+  @@index([quantityOnHand])
+  @@map("stock_levels")
+}
+
+model StockBatch {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId            String    @map("item_id") @db.Uuid
+  locationId        String    @map("location_id") @db.Uuid
+  batchNumber       String    @map("batch_number")
+  expiryDate        DateTime? @map("expiry_date") @db.Date
+  receivedQuantity  Decimal   @map("received_quantity") @db.Decimal(14, 3)
+  remainingQuantity Decimal   @map("remaining_quantity") @db.Decimal(14, 3)
+  unitCost          Int       @map("unit_cost")
+  receivedDate      DateTime  @map("received_date") @db.Date
+  grnId             String?   @map("grn_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  item     Item     @relation(fields: [itemId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@index([itemId, locationId, expiryDate])
+  @@index([remainingQuantity])
+  @@map("stock_batches")
+}
+
+model StockIssueRequest {
+  id            String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestNumber String                  @unique @map("request_number")
+  requestedBy   String                  @map("requested_by") @db.Uuid
+  department    String
+  toLocationId  String                  @map("to_location_id") @db.Uuid
+  purpose       String?
+  status        StockIssueRequestStatus @default(pending)
+  approvedBy    String?                 @map("approved_by") @db.Uuid
+  issuedBy      String?                 @map("issued_by") @db.Uuid
+  issuedAt      DateTime?               @map("issued_at")
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  toLocation Location                @relation(fields: [toLocationId], references: [id])
+  lines      StockIssueRequestLine[]
+
+  @@map("stock_issue_requests")
+}
+
+model StockIssueRequestLine {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId         String  @map("request_id") @db.Uuid
+  itemId            String  @map("item_id") @db.Uuid
+  requestedQuantity Decimal @map("requested_quantity") @db.Decimal(14, 3)
+  approvedQuantity  Decimal? @map("approved_quantity") @db.Decimal(14, 3)
+  issuedQuantity    Decimal @default(0) @map("issued_quantity") @db.Decimal(14, 3)
+
+  request StockIssueRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  item    Item              @relation(fields: [itemId], references: [id])
+
+  @@map("stock_issue_request_lines")
+}
+
+model StockAdjustment {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adjustmentNumber String                 @unique @map("adjustment_number")
+  locationId       String                 @map("location_id") @db.Uuid
+  adjustmentDate   DateTime               @map("adjustment_date") @db.Date
+  reason           String
+  adjustmentType   StockAdjustmentType    @map("adjustment_type")
+  status           StockAdjustmentStatus  @default(draft)
+  approvedBy       String?                @map("approved_by") @db.Uuid
+  journalId        String?                @map("journal_id") @db.Uuid
+  auditId          String?                @map("audit_id") @db.Uuid
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+
+  location Location               @relation(fields: [locationId], references: [id])
+  audit    InventoryAudit?        @relation(fields: [auditId], references: [id])
+  lines    StockAdjustmentLine[]
+
+  @@map("stock_adjustments")
+}
+
+model StockAdjustmentLine {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adjustmentId       String  @map("adjustment_id") @db.Uuid
+  itemId             String  @map("item_id") @db.Uuid
+  systemQuantity     Decimal @map("system_quantity") @db.Decimal(14, 3)
+  adjustedQuantity   Decimal @map("adjusted_quantity") @db.Decimal(14, 3)
+  differenceQuantity Decimal @map("difference_quantity") @db.Decimal(14, 3)
+  unitCost           Int     @map("unit_cost")
+  remarks            String?
+
+  adjustment StockAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  item       Item            @relation(fields: [itemId], references: [id])
+
+  @@map("stock_adjustment_lines")
+}
+
+model Asset {
+  id                        String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetCode                 String             @unique @map("asset_code")
+  itemId                    String             @map("item_id") @db.Uuid
+  name                      String
+  serialNumber              String?            @map("serial_number")
+  purchaseDate              DateTime           @map("purchase_date") @db.Date
+  purchaseCost              Int                @map("purchase_cost")
+  supplierVendorId          String?            @map("supplier_vendor_id") @db.Uuid
+  grnId                     String?            @map("grn_id") @db.Uuid
+  warrantyExpiryDate        DateTime?          @map("warranty_expiry_date") @db.Date
+  usefulLifeMonths          Int?               @map("useful_life_months")
+  salvageValue              Int                @default(0) @map("salvage_value")
+  depreciationMethod        DepreciationMethod @map("depreciation_method")
+  depreciationRatePercent   Decimal?           @map("depreciation_rate_percent") @db.Decimal(7, 4)
+  accumulatedDepreciation   Int                @default(0) @map("accumulated_depreciation")
+  netBookValue              Int                @map("net_book_value")
+  condition                 AssetCondition     @default(new)
+  status                    AssetStatus        @default(in_store)
+  currentLocationId         String?            @map("current_location_id") @db.Uuid
+  currentAssigneeEmployeeId String?            @map("current_assignee_employee_id") @db.Uuid
+  coaAssetAccountCode       String?            @map("coa_asset_account_code") @db.VarChar(20)
+  deletedAt                 DateTime?          @map("deleted_at")
+  createdAt                 DateTime           @default(now()) @map("created_at")
+  updatedAt                 DateTime           @updatedAt @map("updated_at")
+
+  item                 Item                      @relation(fields: [itemId], references: [id])
+  currentLocation      Location?                 @relation(fields: [currentLocationId], references: [id])
+  assignments          AssetAssignment[]
+  conditionLogs        AssetConditionLog[]
+  depreciationEntries  AssetDepreciationEntry[]
+  disposals            AssetDisposal[]
+
+  @@index([assetCode])
+  @@index([status])
+  @@index([currentAssigneeEmployeeId])
+  @@map("assets")
+}
+
+model AssetAssignment {
+  id                          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId                     String              @map("asset_id") @db.Uuid
+  assignedToType              AssetAssignedToType @map("assigned_to_type")
+  assignedToId                String              @map("assigned_to_id") @db.Uuid
+  assignedFrom                DateTime            @map("assigned_from") @db.Date
+  assignedToDate              DateTime?           @map("assigned_to_date") @db.Date
+  assignedBy                  String              @map("assigned_by") @db.Uuid
+  returnedAt                  DateTime?           @map("returned_at")
+  returnCondition             AssetCondition?     @map("return_condition")
+  acknowledgementAttachmentId String?             @map("acknowledgement_attachment_id") @db.Uuid
+  notes                       String?
+  createdAt                   DateTime            @default(now()) @map("created_at")
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("asset_assignments")
+}
+
+model AssetConditionLog {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId      String         @map("asset_id") @db.Uuid
+  loggedAt     DateTime       @map("logged_at")
+  condition    AssetCondition
+  notes        String?
+  attachmentId String?        @map("attachment_id") @db.Uuid
+  loggedBy     String         @map("logged_by") @db.Uuid
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("asset_condition_logs")
+}
+
+model AssetDepreciationEntry {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId            String   @map("asset_id") @db.Uuid
+  periodMonth        Int      @map("period_month")
+  periodYear         Int      @map("period_year")
+  openingNbv         Int      @map("opening_nbv")
+  depreciationAmount Int      @map("depreciation_amount")
+  closingNbv         Int      @map("closing_nbv")
+  journalId          String?  @map("journal_id") @db.Uuid
+  computedAt         DateTime @map("computed_at")
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, periodYear, periodMonth])
+  @@map("asset_depreciation_entries")
+}
+
+model AssetDisposal {
+  id                    String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId               String            @map("asset_id") @db.Uuid
+  disposalDate          DateTime          @map("disposal_date") @db.Date
+  disposalType          AssetDisposalType @map("disposal_type")
+  proceedsAmount        Int               @default(0) @map("proceeds_amount")
+  netBookValueAtDisposal Int              @map("net_book_value_at_disposal")
+  gainLossAmount        Int               @map("gain_loss_amount")
+  reason                String
+  approvedBy            String            @map("approved_by") @db.Uuid
+  journalId             String?           @map("journal_id") @db.Uuid
+  attachmentId          String?           @map("attachment_id") @db.Uuid
+  createdAt             DateTime          @default(now()) @map("created_at")
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("asset_disposals")
+}
+
+model InventoryAudit {
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  auditNumber          String               @unique @map("audit_number")
+  auditType            InventoryAuditType   @map("audit_type")
+  periodLabel          String               @map("period_label")
+  scheduledDate        DateTime             @map("scheduled_date") @db.Date
+  locationIds          String[]             @map("location_ids") @db.Uuid
+  categoryIds          String[]             @map("category_ids") @db.Uuid
+  status               InventoryAuditStatus @default(scheduled)
+  startedAt            DateTime?            @map("started_at")
+  countedBy            String?              @map("counted_by") @db.Uuid
+  reviewedBy           String?              @map("reviewed_by") @db.Uuid
+  signedOffBy          String?              @map("signed_off_by") @db.Uuid
+  signedOffAt          DateTime?            @map("signed_off_at")
+  discrepancyCount     Int                  @default(0) @map("discrepancy_count")
+  netDiscrepancyValue  Int                  @default(0) @map("net_discrepancy_value")
+  notes                String?
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  lines              InventoryAuditLine[]
+  correctiveActions  AuditCorrectiveAction[]
+  stockAdjustments   StockAdjustment[]
+
+  @@map("inventory_audits")
+}
+
+model InventoryAuditLine {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  auditId            String           @map("audit_id") @db.Uuid
+  itemId             String           @map("item_id") @db.Uuid
+  locationId         String           @map("location_id") @db.Uuid
+  systemQuantity     Decimal          @map("system_quantity") @db.Decimal(14, 3)
+  physicalQuantity   Decimal?         @map("physical_quantity") @db.Decimal(14, 3)
+  differenceQuantity Decimal?         @map("difference_quantity") @db.Decimal(14, 3)
+  unitCost           Int              @map("unit_cost")
+  differenceValue    Int?             @map("difference_value")
+  discrepancyType    DiscrepancyType? @map("discrepancy_type")
+  countedBy          String?          @map("counted_by") @db.Uuid
+  countedAt          DateTime?        @map("counted_at")
+  explanation        String?
+
+  audit             InventoryAudit          @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  item              Item                    @relation(fields: [itemId], references: [id])
+  location          Location                @relation(fields: [locationId], references: [id])
+  correctiveActions AuditCorrectiveAction[]
+
+  @@index([auditId, discrepancyType])
+  @@map("inventory_audit_lines")
+}
+
+model AuditCorrectiveAction {
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  auditId           String                 @map("audit_id") @db.Uuid
+  auditLineId       String                 @map("audit_line_id") @db.Uuid
+  actionDescription String                 @map("action_description")
+  responsibleUserId String                 @map("responsible_user_id") @db.Uuid
+  dueDate           DateTime               @map("due_date") @db.Date
+  status            CorrectiveActionStatus @default(open)
+  completedAt       DateTime?              @map("completed_at")
+  outcomeNotes      String?                @map("outcome_notes")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  audit     InventoryAudit     @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  auditLine InventoryAuditLine @relation(fields: [auditLineId], references: [id], onDelete: Cascade)
+
+  @@map("audit_corrective_actions")
+}

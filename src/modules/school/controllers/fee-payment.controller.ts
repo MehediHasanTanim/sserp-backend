@@ -8,7 +8,11 @@ import {
   Audit,
 } from '../../../shared/decorators';
 import { FeePaymentService } from '../services/fee-payment.service';
-import { RecordPaymentDto, ReversePaymentDto, WaiveInvoiceDto } from '../dto/fee-invoice.dto';
+import {
+  RecordPaymentDto,
+  ReversePaymentDto,
+  WaiveInvoiceDto,
+} from '../dto/fee-invoice.dto';
 
 @ApiTags('school')
 @ApiBearerAuth()

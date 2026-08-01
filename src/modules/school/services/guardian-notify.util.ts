@@ -21,12 +21,18 @@ export async function notifyGuardiansForStudent(
     },
   });
   const guardianProfileIds = [
-    ...new Set(links.map((l) => l.guardianProfileId).filter((id): id is string => !!id)),
+    ...new Set(
+      links.map((l) => l.guardianProfileId).filter((id): id is string => !!id),
+    ),
   ];
   if (!guardianProfileIds.length) return;
 
   const users = await prisma.user.findMany({
-    where: { guardianId: { in: guardianProfileIds }, isActive: true, deletedAt: null },
+    where: {
+      guardianId: { in: guardianProfileIds },
+      isActive: true,
+      deletedAt: null,
+    },
   });
   for (const user of users) {
     await notifications.notify({

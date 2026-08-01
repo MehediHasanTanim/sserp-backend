@@ -1,4 +1,7 @@
-import { DomainException, ErrorCode } from '../../../shared/errors/domain-exception';
+import {
+  DomainException,
+  ErrorCode,
+} from '../../../shared/errors/domain-exception';
 import { StudentLeaveService } from './student-leave.service';
 import { EventNames } from '../../../shared/events/event-names';
 

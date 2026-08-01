@@ -170,19 +170,22 @@ export class AccountsService {
       );
     }
 
-    await this.assertAccountsPostable(input.lines, tx, input.entryType === 'manual');
+    await this.assertAccountsPostable(
+      input.lines,
+      tx,
+      input.entryType === 'manual',
+    );
 
-    const period = await this.fiscalPeriods.requireOpenForDate(input.entryDate, tx);
+    const period = await this.fiscalPeriods.requireOpenForDate(
+      input.entryDate,
+      tx,
+    );
 
     if (this.budgetCheck && !input.skipBudgetCheck) {
-      await this.budgetCheck.checkExpenseLines(
-        input.lines,
-        input.entryDate,
-        {
-          overrideReason: input.budgetOverrideReason,
-          tx,
-        },
-      );
+      await this.budgetCheck.checkExpenseLines(input.lines, input.entryDate, {
+        overrideReason: input.budgetOverrideReason,
+        tx,
+      });
     }
 
     const entryNumber = await this.numbering.nextCode('journal_entry', tx);
@@ -236,7 +239,9 @@ export class AccountsService {
 
   validateLines(lines: JournalLineInput[]) {
     if (lines.length < 2) {
-      throw DomainException.validation('A journal must have at least two lines');
+      throw DomainException.validation(
+        'A journal must have at least two lines',
+      );
     }
     for (const line of lines) {
       if (line.debitAmount < 0 || line.creditAmount < 0) {
@@ -262,7 +267,11 @@ export class AccountsService {
       where: { id: { in: ids } },
     });
     if (accounts.length !== ids.length) {
-      throw DomainException.withCode(ErrorCode.INVALID_ACCOUNT, 422, 'Unknown account');
+      throw DomainException.withCode(
+        ErrorCode.INVALID_ACCOUNT,
+        422,
+        'Unknown account',
+      );
     }
     for (const a of accounts) {
       if (!a.isActive) {

@@ -7,9 +7,7 @@ import {
   ErrorCode,
 } from '../../../shared/errors/domain-exception';
 import { EventNames } from '../../../shared/events/event-names';
-import {
-  ConflictDetectionService,
-} from './conflict-detection.service';
+import { ConflictDetectionService } from './conflict-detection.service';
 
 export interface ScheduleSessionDto {
   sessionMode: SessionMode;
@@ -66,7 +64,9 @@ export class SessionService {
 
   async schedule(dto: ScheduleSessionDto, createdBy: string) {
     if (dto.scheduledEnd <= dto.scheduledStart) {
-      throw DomainException.validation('scheduledEnd must be after scheduledStart');
+      throw DomainException.validation(
+        'scheduledEnd must be after scheduledStart',
+      );
     }
 
     const durationMinutesPlanned = Math.round(
@@ -113,7 +113,10 @@ export class SessionService {
       },
     });
 
-    this.events.emit(EventNames.SESSION_SCHEDULED, { sessionId: session.id, createdBy });
+    this.events.emit(EventNames.SESSION_SCHEDULED, {
+      sessionId: session.id,
+      createdBy,
+    });
     return session;
   }
 
@@ -174,7 +177,10 @@ export class SessionService {
       },
     });
 
-    this.events.emit(EventNames.SESSION_RESCHEDULED, { sessionId: dto.sessionId, updatedBy });
+    this.events.emit(EventNames.SESSION_RESCHEDULED, {
+      sessionId: dto.sessionId,
+      updatedBy,
+    });
     return updated;
   }
 
@@ -238,7 +244,9 @@ export class SessionService {
   async markNoShow(sessionId: string, recordedBy: string) {
     const session = await this.findById(sessionId);
     if (session.status !== 'scheduled') {
-      throw DomainException.validation('Only scheduled sessions can be marked as no-show');
+      throw DomainException.validation(
+        'Only scheduled sessions can be marked as no-show',
+      );
     }
 
     const updated = await this.prisma.therapySession.update({
@@ -263,11 +271,18 @@ export class SessionService {
   async addNote(dto: AddSessionNoteDto, authoredBy: string) {
     const session = await this.findById(dto.sessionId);
     if (session.status === 'cancelled') {
-      throw DomainException.validation('Cannot add notes to a cancelled session');
+      throw DomainException.validation(
+        'Cannot add notes to a cancelled session',
+      );
     }
 
     return this.prisma.sessionNote.upsert({
-      where: { sessionId_patientId: { sessionId: dto.sessionId, patientId: dto.patientId } },
+      where: {
+        sessionId_patientId: {
+          sessionId: dto.sessionId,
+          patientId: dto.patientId,
+        },
+      },
       create: {
         sessionId: dto.sessionId,
         patientId: dto.patientId,
@@ -292,7 +307,8 @@ export class SessionService {
       where: { sessionId_patientId: { sessionId, patientId } },
     });
     if (!note) throw DomainException.notFound('Session note not found');
-    if (note.status === 'co_signed') throw DomainException.conflict('Note is already co-signed');
+    if (note.status === 'co_signed')
+      throw DomainException.conflict('Note is already co-signed');
 
     return this.prisma.sessionNote.update({
       where: { id: note.id },
@@ -310,7 +326,8 @@ export class SessionService {
       where: { sessionId_patientId: { sessionId, patientId } },
     });
     if (!note) throw DomainException.notFound('Session note not found');
-    if (note.status !== 'final') throw DomainException.validation('Only finalized notes can be co-signed');
+    if (note.status !== 'final')
+      throw DomainException.validation('Only finalized notes can be co-signed');
 
     return this.prisma.sessionNote.update({
       where: { id: note.id },

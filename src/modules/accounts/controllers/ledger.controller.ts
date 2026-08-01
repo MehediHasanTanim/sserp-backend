@@ -20,7 +20,11 @@ export class LedgerController {
     @Query('from') from: string,
     @Query('to') to: string,
   ) {
-    return this.ledger.getAccountLedger(accountId, new Date(from), new Date(to));
+    return this.ledger.getAccountLedger(
+      accountId,
+      new Date(from),
+      new Date(to),
+    );
   }
 
   @Get('trial-balance')

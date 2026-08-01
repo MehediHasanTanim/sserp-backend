@@ -49,7 +49,11 @@ export class BehavioralController {
   @Post('behavior-support-plan')
   @Roles('coordinator', 'super_admin')
   @Permissions('school:create')
-  @Audit({ module: 'school', entity: 'behavior_support_plan', action: 'create' })
+  @Audit({
+    module: 'school',
+    entity: 'behavior_support_plan',
+    action: 'create',
+  })
   createSupportPlan(
     @Param('id') studentId: string,
     @Body() dto: CreateBehaviorSupportPlanDto,
@@ -61,7 +65,11 @@ export class BehavioralController {
   @Patch('behavior-support-plan')
   @Roles('coordinator', 'super_admin')
   @Permissions('school:update')
-  @Audit({ module: 'school', entity: 'behavior_support_plan', action: 'update' })
+  @Audit({
+    module: 'school',
+    entity: 'behavior_support_plan',
+    action: 'update',
+  })
   updateSupportPlan(
     @Param('id') studentId: string,
     @Body() dto: UpdateBehaviorSupportPlanDto,

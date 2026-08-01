@@ -7,7 +7,9 @@ export class LedgerQueryService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getAccountLedger(accountId: string, from: Date, to: Date) {
-    const account = await this.prisma.chartOfAccount.findUnique({ where: { id: accountId } });
+    const account = await this.prisma.chartOfAccount.findUnique({
+      where: { id: accountId },
+    });
     if (!account) throw DomainException.notFound('Account not found');
 
     const priorLines = await this.prisma.journalLine.aggregate({
@@ -30,7 +32,9 @@ export class LedgerQueryService {
         journal: { status: 'posted', entryDate: { gte: from, lte: to } },
       },
       include: {
-        journal: { select: { entryNumber: true, entryDate: true, description: true } },
+        journal: {
+          select: { entryNumber: true, entryDate: true, description: true },
+        },
       },
       orderBy: [{ journal: { entryDate: 'asc' } }, { lineNumber: 'asc' }],
     });
@@ -51,13 +55,15 @@ export class LedgerQueryService {
       account,
       from,
       to,
-      openingBalance: runningBalance - entries.reduce((s, e) => {
-        const d =
-          account.normalBalance === 'debit'
-            ? e.debitAmount - e.creditAmount
-            : e.creditAmount - e.debitAmount;
-        return s + d;
-      }, 0),
+      openingBalance:
+        runningBalance -
+        entries.reduce((s, e) => {
+          const d =
+            account.normalBalance === 'debit'
+              ? e.debitAmount - e.creditAmount
+              : e.creditAmount - e.debitAmount;
+          return s + d;
+        }, 0),
       closingBalance: runningBalance,
       lines: entries,
     };

@@ -1,0 +1,35 @@
+name: Nightly ZAP active
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  zap-active:
+    runs-on: ubuntu-latest
+    env:
+      TARGET: ${{ secrets.STAGING_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require staging URL
+        run: |
+          if [ -z "$TARGET" ]; then
+            echo "STAGING_BASE_URL secret not configured — skipping ZAP active."
+            exit 0
+          fi
+      - name: OWASP ZAP Full Scan
+        if: env.TARGET != ''
+        uses: zaproxy/action-full-scan@v0.12.0
+        with:
+          target: ${{ secrets.STAGING_BASE_URL }}
+          rules_file_name: '.zap/rules.tsv'
+          fail_action: false
+      - name: Upload ZAP Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-active-report
+          path: report_html.html
+          retention-days: 90
+          if-no-files-found: ignore

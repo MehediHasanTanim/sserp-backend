@@ -9,8 +9,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
-import { Roles, CurrentUser, AuthUser, Audit } from '../../../shared/decorators';
+import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  Roles,
+  CurrentUser,
+  AuthUser,
+  Audit,
+} from '../../../shared/decorators';
 import { PortalScopeGuard } from '../guards/portal-scope.guard';
 import { PortalScope } from '../services/portal-scope.service';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
@@ -24,6 +29,7 @@ import { EventNames } from '../../../shared/events/event-names';
 import { Prisma } from '@prisma/client';
 import { SessionService } from '../../therapy/services/session.service';
 import { PatientService } from '../../therapy/services/patient.service';
+import { PortalPaymentService } from '../../hardening/services/portal-payment.service';
 
 type PortalUser = AuthUser & { portalScope?: PortalScope };
 
@@ -50,6 +56,12 @@ class MessageDto {
   @IsString() studentId!: string;
 }
 
+class FeePayIntentDto {
+  @IsString() invoiceId!: string;
+  @IsString() returnUrl!: string;
+  @IsOptional() @IsInt() @Min(1) amount?: number;
+}
+
 @ApiTags('portal')
 @ApiBearerAuth()
 @UseGuards(PortalScopeGuard)
@@ -65,6 +77,7 @@ export class PortalController {
     private readonly events: EventEmitter2,
     private readonly sessionService: SessionService,
     private readonly patientService: PatientService,
+    private readonly portalPayments: PortalPaymentService,
   ) {}
 
   @Get('children')
@@ -112,7 +125,9 @@ export class PortalController {
   @Get('children/:studentId/iep')
   async childIep(@Param('studentId') studentId: string) {
     const plans = await this.iep.listForStudent(studentId);
-    return plans.filter((p) => p.status === 'active' || p.status === 'archived');
+    return plans.filter(
+      (p) => p.status === 'active' || p.status === 'archived',
+    );
   }
 
   @Get('children/:studentId/iep/history')
@@ -150,6 +165,22 @@ export class PortalController {
       where: { studentId },
       include: { payments: true },
       orderBy: { issueDate: 'desc' },
+    });
+  }
+
+  @Post('children/:studentId/fees/pay')
+  @Audit({ module: 'portal', entity: 'fee_payment', action: 'intent' })
+  payFee(
+    @Param('studentId') studentId: string,
+    @Body() dto: FeePayIntentDto,
+    @CurrentUser() user: PortalUser,
+  ) {
+    return this.portalPayments.createFeePaymentIntent({
+      invoiceId: dto.invoiceId,
+      studentId,
+      returnUrl: dto.returnUrl,
+      userId: user.id,
+      amount: dto.amount,
     });
   }
 
@@ -195,7 +226,10 @@ export class PortalController {
     @Body() dto: ActivityRespondDto & { studentId: string },
     @CurrentUser() user: PortalUser,
   ) {
-    if (!dto.studentId || !user.portalScope!.studentIds.includes(dto.studentId)) {
+    if (
+      !dto.studentId ||
+      !user.portalScope!.studentIds.includes(dto.studentId)
+    ) {
       throw DomainException.forbidden('Student not in scope');
     }
     return this.enrollments.respond({
@@ -215,9 +249,11 @@ export class PortalController {
     @Query('to') to?: string,
   ) {
     // Find the patient record linked to this student
-    const patient = await this.prisma.patient.findFirst({
-      where: { studentId, deletedAt: null },
-    }).catch(() => null);
+    const patient = await this.prisma.patient
+      .findFirst({
+        where: { studentId, deletedAt: null },
+      })
+      .catch(() => null);
 
     if (!patient) return [];
 
@@ -238,10 +274,7 @@ export class PortalController {
 
   @Post('messages')
   @Audit({ module: 'portal', entity: 'message', action: 'create' })
-  async postMessage(
-    @Body() dto: MessageDto,
-    @CurrentUser() user: PortalUser,
-  ) {
+  async postMessage(@Body() dto: MessageDto, @CurrentUser() user: PortalUser) {
     if (!user.portalScope!.studentIds.includes(dto.studentId)) {
       throw DomainException.forbidden('Student not in scope');
     }

@@ -29,7 +29,11 @@ describe('ConflictDetectionService', () => {
 
   it('C-01: should detect therapist double-booking', async () => {
     prisma.therapySession.findMany.mockResolvedValue([
-      { id: 'sess1', scheduledStart: new Date('2026-01-01T09:30:00Z'), scheduledEnd: new Date('2026-01-01T10:30:00Z') },
+      {
+        id: 'sess1',
+        scheduledStart: new Date('2026-01-01T09:30:00Z'),
+        scheduledEnd: new Date('2026-01-01T10:30:00Z'),
+      },
     ]);
     const result = await service.check(makeInput(9, 10));
     expect(result.blocking).toHaveLength(1);
@@ -51,14 +55,29 @@ describe('ConflictDetectionService', () => {
     prisma.therapySession.findMany
       .mockResolvedValueOnce([]) // therapist: no conflict
       .mockResolvedValueOnce([
-        { id: 'sess2', scheduledStart: new Date('2026-01-01T09:00:00Z'), scheduledEnd: new Date('2026-01-01T10:00:00Z') },
+        {
+          id: 'sess2',
+          scheduledStart: new Date('2026-01-01T09:00:00Z'),
+          scheduledEnd: new Date('2026-01-01T10:00:00Z'),
+        },
       ]);
-    const result = await service.check({ ...makeInput(9, 10), patientId: 'p1' });
-    expect(result.blocking.some((b) => b.type === 'patient_double_booking')).toBe(true);
+    const result = await service.check({
+      ...makeInput(9, 10),
+      patientId: 'p1',
+    });
+    expect(
+      result.blocking.some((b) => b.type === 'patient_double_booking'),
+    ).toBe(true);
   });
 
   it('C-05: should detect leave conflict', async () => {
-    prisma.hrLeaveRequest = { findFirst: jest.fn().mockResolvedValue({ id: 'lv1', startDate: new Date('2026-01-01'), endDate: new Date('2026-01-01') }) };
+    prisma.hrLeaveRequest = {
+      findFirst: jest.fn().mockResolvedValue({
+        id: 'lv1',
+        startDate: new Date('2026-01-01'),
+        endDate: new Date('2026-01-01'),
+      }),
+    };
     const result = await service.checkWithLeave(makeInput(9, 10), 'emp1');
     expect(result.blocking.some((b) => b.type === 'leave_conflict')).toBe(true);
   });

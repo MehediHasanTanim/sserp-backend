@@ -1,4 +1,4 @@
--- Application role used by the NestJS API (least privilege for audit_logs)
+-- Application role used by the NestJS API (least privilege; NO BYPASSRLS — H-01)
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sserp_app') THEN
@@ -6,6 +6,8 @@ BEGIN
   END IF;
 END
 $$;
+
+ALTER ROLE sserp_app NOSUPERUSER NOBYPASSRLS;
 
 GRANT CONNECT ON DATABASE sserp TO sserp_app;
 GRANT USAGE ON SCHEMA public TO sserp_app;

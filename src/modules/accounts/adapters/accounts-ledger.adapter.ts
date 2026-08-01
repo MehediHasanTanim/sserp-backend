@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { TxClient } from '../../../shared/prisma/transaction.helper';
-import { LedgerPort, PostingRequest, PostingResult } from '../../../shared/ports/ledger.port';
+import {
+  LedgerPort,
+  PostingRequest,
+  PostingResult,
+} from '../../../shared/ports/ledger.port';
 import { AccountsService } from '../services/accounts.service';
 
 @Injectable()

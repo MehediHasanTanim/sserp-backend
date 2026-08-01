@@ -33,47 +33,91 @@ describe('TherapistService', () => {
 
   describe('create', () => {
     it('T-01: should create a therapist for an active employee', async () => {
-      hrRead.findById.mockResolvedValue({ id: 'emp1', fullName: 'John', status: 'active' });
+      hrRead.findById.mockResolvedValue({
+        id: 'emp1',
+        fullName: 'John',
+        status: 'active',
+      });
       prisma.therapist.findFirst.mockResolvedValue(null);
-      prisma.therapist.create.mockResolvedValue({ id: 'th1', employeeId: 'emp1' });
+      prisma.therapist.create.mockResolvedValue({
+        id: 'th1',
+        employeeId: 'emp1',
+      });
 
       const result = await service.create({ employeeId: 'emp1' }, 'user1');
       expect(result.id).toBe('th1');
-      expect(events.emit).toHaveBeenCalledWith('therapist.created', expect.any(Object));
+      expect(events.emit).toHaveBeenCalledWith(
+        'therapist.created',
+        expect.any(Object),
+      );
     });
 
     it('T-02: should reject creating therapist for inactive employee', async () => {
-      hrRead.findById.mockResolvedValue({ id: 'emp1', fullName: 'John', status: 'resigned' });
+      hrRead.findById.mockResolvedValue({
+        id: 'emp1',
+        fullName: 'John',
+        status: 'resigned',
+      });
 
-      await expect(service.create({ employeeId: 'emp1' }, 'user1')).rejects.toThrow('not active');
+      await expect(
+        service.create({ employeeId: 'emp1' }, 'user1'),
+      ).rejects.toThrow('not active');
     });
 
     it('T-03: should reject duplicate therapist profile', async () => {
-      hrRead.findById.mockResolvedValue({ id: 'emp1', fullName: 'John', status: 'active' });
+      hrRead.findById.mockResolvedValue({
+        id: 'emp1',
+        fullName: 'John',
+        status: 'active',
+      });
       prisma.therapist.findFirst.mockResolvedValue({ id: 'existing' });
 
-      await expect(service.create({ employeeId: 'emp1' }, 'user1')).rejects.toThrow('already exists');
+      await expect(
+        service.create({ employeeId: 'emp1' }, 'user1'),
+      ).rejects.toThrow('already exists');
     });
   });
 
   describe('addSpecialization', () => {
     it('T-04: should derive supportsGroup=true for ot', async () => {
-      prisma.therapist.findFirst.mockResolvedValue({ id: 'th1', deletedAt: null });
-      prisma.therapistSpecialization.create.mockResolvedValue({ id: 'spec1', supportsGroup: true });
+      prisma.therapist.findFirst.mockResolvedValue({
+        id: 'th1',
+        deletedAt: null,
+      });
+      prisma.therapistSpecialization.create.mockResolvedValue({
+        id: 'spec1',
+        supportsGroup: true,
+      });
 
-      const result = await service.addSpecialization({ therapistId: 'th1', therapyType: 'ot' });
+      const result = await service.addSpecialization({
+        therapistId: 'th1',
+        therapyType: 'ot',
+      });
       expect(prisma.therapistSpecialization.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ supportsGroup: true }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ supportsGroup: true }),
+        }),
       );
     });
 
     it('T-05: should derive supportsGroup=false for aba', async () => {
-      prisma.therapist.findFirst.mockResolvedValue({ id: 'th1', deletedAt: null });
-      prisma.therapistSpecialization.create.mockResolvedValue({ id: 'spec2', supportsGroup: false });
+      prisma.therapist.findFirst.mockResolvedValue({
+        id: 'th1',
+        deletedAt: null,
+      });
+      prisma.therapistSpecialization.create.mockResolvedValue({
+        id: 'spec2',
+        supportsGroup: false,
+      });
 
-      await service.addSpecialization({ therapistId: 'th1', therapyType: 'aba' });
+      await service.addSpecialization({
+        therapistId: 'th1',
+        therapyType: 'aba',
+      });
       expect(prisma.therapistSpecialization.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ supportsGroup: false }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ supportsGroup: false }),
+        }),
       );
     });
   });

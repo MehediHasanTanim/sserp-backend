@@ -95,7 +95,11 @@ export class DisbursementController {
 
   @Post('disbursements/:id/pay')
   @Roles('accountant', 'super_admin')
-  pay(@Param('id') id: string, @Body() body: any, @CurrentUser() user: AuthUser) {
+  pay(
+    @Param('id') id: string,
+    @Body() body: any,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.disbursements.pay(id, {
       ...body,
       paymentDate: new Date(body.paymentDate),

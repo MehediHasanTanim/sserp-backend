@@ -106,4 +106,95 @@ export class AcademicYearService {
       },
     });
   }
+
+  /**
+   * Bulk re-enroll active students into targetYearId from sourceYearId (default: current student year).
+   * Idempotent via unique(studentId, academicYearId).
+   */
+  async carryForward(
+    sourceYearId: string,
+    input: {
+      targetYearId: string;
+      shiftId?: string;
+      enrollmentDate?: string;
+      dryRun?: boolean;
+    },
+  ) {
+    const source = await this.get(sourceYearId);
+    const target = await this.get(input.targetYearId);
+    if (source.id === target.id) {
+      throw DomainException.validation(
+        'targetYearId must differ from source academic year',
+      );
+    }
+
+    const students = await this.prisma.student.findMany({
+      where: {
+        deletedAt: null,
+        status: 'active',
+        academicYearId: sourceYearId,
+        ...(input.shiftId ? { shiftId: input.shiftId } : {}),
+      },
+      select: { id: true, shiftId: true },
+    });
+
+    const existing = await this.prisma.studentEnrollment.findMany({
+      where: {
+        academicYearId: target.id,
+        studentId: { in: students.map((s) => s.id) },
+      },
+      select: { studentId: true },
+    });
+    const already = new Set(existing.map((e) => e.studentId));
+    const eligible = students.filter((s) => !already.has(s.id) && s.shiftId);
+    const skippedNoShift = students.filter((s) => !s.shiftId).length;
+
+    if (input.dryRun) {
+      return {
+        dryRun: true,
+        sourceYearId: source.id,
+        targetYearId: target.id,
+        candidateCount: students.length,
+        alreadyEnrolled: already.size,
+        wouldEnroll: eligible.length,
+        skippedNoShift,
+      };
+    }
+
+    const enrollmentDate = input.enrollmentDate
+      ? new Date(input.enrollmentDate)
+      : target.startDate;
+    let enrolled = 0;
+    for (const student of eligible) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.studentEnrollment.create({
+          data: {
+            studentId: student.id,
+            academicYearId: target.id,
+            shiftId: student.shiftId!,
+            enrollmentDate,
+            status: 'enrolled',
+          },
+        });
+        await tx.student.update({
+          where: { id: student.id },
+          data: {
+            academicYearId: target.id,
+            shiftId: student.shiftId,
+          },
+        });
+      });
+      enrolled += 1;
+    }
+
+    return {
+      dryRun: false,
+      sourceYearId: source.id,
+      targetYearId: target.id,
+      candidateCount: students.length,
+      alreadyEnrolled: already.size,
+      enrolled,
+      skippedNoShift,
+    };
+  }
 }

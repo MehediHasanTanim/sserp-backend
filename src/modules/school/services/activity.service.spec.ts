@@ -22,7 +22,9 @@ describe('ActivityEnrollmentService', () => {
         $queryRaw: jest.fn(),
         activityEnrollment: {
           count: jest.fn().mockResolvedValue(0),
-          aggregate: jest.fn().mockResolvedValue({ _max: { waitlistPosition: null } }),
+          aggregate: jest
+            .fn()
+            .mockResolvedValue({ _max: { waitlistPosition: null } }),
           upsert: jest.fn().mockResolvedValue({
             id: 'e1',
             enrollmentState: 'confirmed',

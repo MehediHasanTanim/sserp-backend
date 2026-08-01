@@ -8,7 +8,11 @@ import {
 import { EventNames } from '../../../shared/events/event-names';
 import { NumberingService } from '../../admin/services/organization.service';
 import { LedgerPort } from '../../../shared/ports/ledger.port';
-import { RecordPaymentDto, ReversePaymentDto, WaiveInvoiceDto } from '../dto/fee-invoice.dto';
+import {
+  RecordPaymentDto,
+  ReversePaymentDto,
+  WaiveInvoiceDto,
+} from '../dto/fee-invoice.dto';
 
 const COST_CENTER = 'school';
 const ACCOUNT_AR_STUDENTS = '1200';
@@ -113,7 +117,10 @@ export class FeePaymentService {
       debitAccountCode: cashOrBankAccount(result.payment.method),
       creditAccountCode: ACCOUNT_AR_STUDENTS,
       postingDate: result.payment.paymentDate,
-      payload: { paymentMethod: result.payment.method, variant: result.payment.method },
+      payload: {
+        paymentMethod: result.payment.method,
+        variant: result.payment.method,
+      },
     });
 
     await this.events.emitAsync(EventNames.FEE_PAYMENT_RECEIVED, {
@@ -203,7 +210,12 @@ export class FeePaymentService {
   }
 
   /** F-10: requires principal and a reason; reduces outstanding, posts a waiver expense. */
-  async waive(invoiceId: string, input: WaiveInvoiceDto, actorId: string, actorRoles: string[]) {
+  async waive(
+    invoiceId: string,
+    input: WaiveInvoiceDto,
+    actorId: string,
+    actorRoles: string[],
+  ) {
     if (!actorRoles.some((r) => WAIVER_ROLES.includes(r))) {
       throw DomainException.forbidden('Only a principal may waive an invoice');
     }

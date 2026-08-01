@@ -20,13 +20,19 @@ describe('RecurrenceService - expandDates', () => {
         updateMany: jest.fn(),
       },
     };
-    conflictDetection = { check: jest.fn().mockResolvedValue({ blocking: [], warnings: [] }) };
+    conflictDetection = {
+      check: jest.fn().mockResolvedValue({ blocking: [], warnings: [] }),
+    };
     sessionService = { schedule: jest.fn().mockResolvedValue({ id: 'sess1' }) };
     service = new RecurrenceService(prisma, conflictDetection, sessionService);
   });
 
   describe('expandDates (via private method access)', () => {
-    function makeRecurrence(pattern: any, dayOfWeek?: number, dayOfMonth?: number) {
+    function makeRecurrence(
+      pattern: any,
+      dayOfWeek?: number,
+      dayOfMonth?: number,
+    ) {
       return {
         recurrencePattern: pattern,
         startDate: new Date('2026-01-05'),
@@ -76,7 +82,10 @@ describe('RecurrenceService - expandDates', () => {
 
   describe('materialiseRange', () => {
     it('R-05: should skip conflicting dates when strict=false', async () => {
-      conflictDetection.check.mockResolvedValue({ blocking: [{ type: 'therapist_double_booking', message: 'conflict' }], warnings: [] });
+      conflictDetection.check.mockResolvedValue({
+        blocking: [{ type: 'therapist_double_booking', message: 'conflict' }],
+        warnings: [],
+      });
       prisma.therapyRecurrence.findUnique.mockResolvedValue({
         id: 'rec1',
         status: 'active',
@@ -95,13 +104,22 @@ describe('RecurrenceService - expandDates', () => {
         endDate: null,
       });
 
-      const result = await service.materialiseRange('rec1', new Date('2026-01-05'), new Date('2026-01-26'), false, 'sys');
+      const result = await service.materialiseRange(
+        'rec1',
+        new Date('2026-01-05'),
+        new Date('2026-01-26'),
+        false,
+        'sys',
+      );
       expect(result.skipped.length).toBeGreaterThan(0);
       expect(sessionService.schedule).not.toHaveBeenCalled();
     });
 
     it('R-06: strict mode should throw on first conflict', async () => {
-      conflictDetection.check.mockResolvedValue({ blocking: [{ message: 'conflict' }], warnings: [] });
+      conflictDetection.check.mockResolvedValue({
+        blocking: [{ message: 'conflict' }],
+        warnings: [],
+      });
       prisma.therapyRecurrence.findUnique.mockResolvedValue({
         id: 'rec1',
         status: 'active',
@@ -121,8 +139,46 @@ describe('RecurrenceService - expandDates', () => {
       });
 
       await expect(
-        service.materialiseRange('rec1', new Date('2026-01-05'), new Date('2026-01-26'), true, 'sys'),
+        service.materialiseRange(
+          'rec1',
+          new Date('2026-01-05'),
+          new Date('2026-01-26'),
+          true,
+          'sys',
+        ),
       ).rejects.toThrow('conflict');
+    });
+
+    it('stops when endAfterSessions count is reached', async () => {
+      prisma.therapySession.count.mockResolvedValue(2);
+      prisma.therapyRecurrence.findUnique.mockResolvedValue({
+        id: 'rec1',
+        status: 'active',
+        sessionMode: 'individual',
+        therapistId: 'th1',
+        patientId: 'p1',
+        groupId: null,
+        therapyType: 'ot',
+        recurrencePattern: 'weekly',
+        dayOfWeek: 1,
+        dayOfMonth: null,
+        startTime: new Date('2026-01-05T09:00:00Z'),
+        durationMinutes: 60,
+        room: null,
+        startDate: new Date('2026-01-05'),
+        endDate: null,
+        endAfterSessions: 3,
+      });
+
+      const result = await service.materialiseRange(
+        'rec1',
+        new Date('2026-01-05'),
+        new Date('2026-03-01'),
+        false,
+        'sys',
+      );
+      expect(sessionService.schedule).toHaveBeenCalledTimes(1);
+      expect(result.created).toBe(1);
     });
   });
 });

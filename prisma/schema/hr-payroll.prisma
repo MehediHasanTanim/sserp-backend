@@ -1,0 +1,804 @@
+// Phase 5 — Payroll, Gratuity, Encashment, Performance, Recruitment, Training, Benefits
+
+model SalaryComponent {
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code              String                 @unique
+  name              String
+  componentType     SalaryComponentType    @map("component_type")
+  calculationType   SalaryCalculationType  @map("calculation_type")
+  value             Decimal                @default(0) @db.Decimal(12, 4)
+  formulaExpression String?                @map("formula_expression")
+  isTaxable         Boolean                @default(true) @map("is_taxable")
+  isStatutory       Boolean                @default(false) @map("is_statutory")
+  affectsGratuity   Boolean                @default(false) @map("affects_gratuity")
+  coaAccountCode    String                 @map("coa_account_code") @db.VarChar(20)
+  sequence          Int                    @default(0)
+  isActive          Boolean                @default(true) @map("is_active")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  structureLines SalaryStructureLine[]
+  slipLines      PayrollSlipLine[]
+
+  @@map("salary_components")
+}
+
+model PayrollGroup {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  employmentTypes  String[]     @map("employment_types")
+  payFrequency     PayFrequency @default(monthly) @map("pay_frequency")
+  payDayOfMonth    Int          @map("pay_day_of_month")
+  isActive         Boolean      @default(true) @map("is_active")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  salaryStructures SalaryStructure[]
+  payrollRuns      PayrollRun[]
+
+  @@map("payroll_groups")
+}
+
+model SalaryStructure {
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId      String                 @map("employee_id") @db.Uuid
+  payrollGroupId  String                 @map("payroll_group_id") @db.Uuid
+  effectiveFrom   DateTime               @map("effective_from") @db.Date
+  effectiveTo     DateTime?              @map("effective_to") @db.Date
+  grossAmount     Int                    @map("gross_amount")
+  status          SalaryStructureStatus  @default(draft)
+  approvedBy      String?                @map("approved_by") @db.Uuid
+  approvedAt      DateTime?              @map("approved_at")
+  revisionReason  String?                @map("revision_reason")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  employee     Employee              @relation(fields: [employeeId], references: [id])
+  payrollGroup PayrollGroup          @relation(fields: [payrollGroupId], references: [id])
+  lines        SalaryStructureLine[]
+  increments   IncrementRecommendation[]
+
+  @@index([employeeId, status])
+  @@index([effectiveFrom])
+  @@map("salary_structures")
+}
+
+model SalaryStructureLine {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  salaryStructureId String  @map("salary_structure_id") @db.Uuid
+  salaryComponentId String  @map("salary_component_id") @db.Uuid
+  amount            Int
+  overrideValue     Decimal? @map("override_value") @db.Decimal(12, 4)
+
+  salaryStructure SalaryStructure @relation(fields: [salaryStructureId], references: [id], onDelete: Cascade)
+  salaryComponent SalaryComponent @relation(fields: [salaryComponentId], references: [id])
+
+  @@unique([salaryStructureId, salaryComponentId])
+  @@map("salary_structure_lines")
+}
+
+model PayrollRun {
+  id                       String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  periodMonth              Int              @map("period_month")
+  periodYear               Int              @map("period_year")
+  payrollGroupId           String           @map("payroll_group_id") @db.Uuid
+  runNumber                Int              @default(1) @map("run_number")
+  status                   PayrollRunStatus @default(draft)
+  employeeCount            Int              @default(0) @map("employee_count")
+  totalGross               Int              @default(0) @map("total_gross")
+  totalDeductions          Int              @default(0) @map("total_deductions")
+  totalNet                 Int              @default(0) @map("total_net")
+  totalEmployerContribution Int             @default(0) @map("total_employer_contribution")
+  calculatedAt             DateTime?        @map("calculated_at")
+  approvedBy               String?          @map("approved_by") @db.Uuid
+  approvedAt               DateTime?        @map("approved_at")
+  lockedAt                 DateTime?        @map("locked_at")
+  lockedBy                 String?          @map("locked_by") @db.Uuid
+  journalId                String?          @map("journal_id") @db.Uuid
+  bankFileObjectKey        String?          @map("bank_file_object_key")
+  bankFileChecksum         String?          @map("bank_file_checksum")
+  notes                    String?
+  createdAt                DateTime         @default(now()) @map("created_at")
+  updatedAt                DateTime         @updatedAt @map("updated_at")
+
+  payrollGroup PayrollGroup  @relation(fields: [payrollGroupId], references: [id])
+  slips        PayrollSlip[]
+  bonuses      Bonus[]
+  adjustments  PayrollAdjustment[]
+  encashments  EncashmentRequest[]
+
+  @@unique([periodMonth, periodYear, payrollGroupId, runNumber])
+  @@index([periodYear, periodMonth, payrollGroupId])
+  @@index([status])
+  @@map("payroll_runs")
+}
+
+model PayrollSlip {
+  id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  payrollRunId         String                   @map("payroll_run_id") @db.Uuid
+  employeeId           String                   @map("employee_id") @db.Uuid
+  slipNumber           String                   @unique @map("slip_number")
+  workingDays          Decimal                  @map("working_days") @db.Decimal(5, 2)
+  presentDays          Decimal                  @map("present_days") @db.Decimal(5, 2)
+  absentDays           Decimal                  @map("absent_days") @db.Decimal(5, 2)
+  leaveDays            Decimal                  @map("leave_days") @db.Decimal(5, 2)
+  lopDays              Decimal                  @map("lop_days") @db.Decimal(5, 2)
+  overtimeMinutes      Int                      @default(0) @map("overtime_minutes")
+  grossAmount          Int                      @map("gross_amount")
+  totalDeductions      Int                      @map("total_deductions")
+  netAmount            Int                      @map("net_amount")
+  documentAttachmentId String?                  @map("document_attachment_id") @db.Uuid
+  paymentStatus        PayrollSlipPaymentStatus @default(pending) @map("payment_status")
+  paymentReference     String?                  @map("payment_reference")
+  paidAt               DateTime?                @map("paid_at")
+  createdAt            DateTime                 @default(now()) @map("created_at")
+  updatedAt            DateTime                 @updatedAt @map("updated_at")
+
+  payrollRun PayrollRun        @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee   Employee          @relation(fields: [employeeId], references: [id])
+  lines      PayrollSlipLine[]
+  loanRepayments LoanRepayment[]
+
+  @@unique([payrollRunId, employeeId])
+  @@index([payrollRunId])
+  @@index([employeeId, payrollRunId])
+  @@map("payroll_slips")
+}
+
+model PayrollSlipLine {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  payrollSlipId   String              @map("payroll_slip_id") @db.Uuid
+  salaryComponentId String?           @map("salary_component_id") @db.Uuid
+  componentName   String              @map("component_name")
+  componentType   SalaryComponentType @map("component_type")
+  amount          Int
+  calculationNote String?             @map("calculation_note")
+
+  payrollSlip     PayrollSlip      @relation(fields: [payrollSlipId], references: [id], onDelete: Cascade)
+  salaryComponent SalaryComponent? @relation(fields: [salaryComponentId], references: [id])
+
+  @@index([payrollSlipId])
+  @@map("payroll_slip_lines")
+}
+
+model StatutoryDeductionSetting {
+  id                   String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deductionType        StatutoryDeductionType       @map("deduction_type")
+  name                 String
+  calculationMethod    StatutoryCalculationMethod   @map("calculation_method")
+  slabs                Json?
+  employeeRatePercent  Decimal?                     @map("employee_rate_percent") @db.Decimal(8, 4)
+  employerRatePercent  Decimal?                     @map("employer_rate_percent") @db.Decimal(8, 4)
+  ceilingAmount        Int?                         @map("ceiling_amount")
+  effectiveFrom        DateTime                     @map("effective_from") @db.Date
+  effectiveTo          DateTime?                    @map("effective_to") @db.Date
+  coaAccountCode       String                       @map("coa_account_code") @db.VarChar(20)
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
+
+  @@index([deductionType, effectiveFrom])
+  @@map("statutory_deduction_settings")
+}
+
+model Bonus {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId      String      @map("employee_id") @db.Uuid
+  bonusType       BonusType   @map("bonus_type")
+  amount          Int
+  applicableMonth Int         @map("applicable_month")
+  applicableYear  Int         @map("applicable_year")
+  reason          String?
+  status          BonusStatus @default(pending)
+  approvedBy      String?     @map("approved_by") @db.Uuid
+  payrollRunId    String?     @map("payroll_run_id") @db.Uuid
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  employee   Employee    @relation(fields: [employeeId], references: [id])
+  payrollRun PayrollRun? @relation(fields: [payrollRunId], references: [id])
+
+  @@index([employeeId, applicableYear, applicableMonth])
+  @@map("bonuses")
+}
+
+model PayrollAdjustment {
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId          String                   @map("employee_id") @db.Uuid
+  periodMonth         Int                      @map("period_month")
+  periodYear          Int                      @map("period_year")
+  adjustmentType      PayrollAdjustmentType    @map("adjustment_type")
+  label               String
+  amount              Int
+  reason              String?
+  sourceType          PayrollAdjustmentSource  @map("source_type")
+  sourceId            String?                  @map("source_id") @db.Uuid
+  appliedPayrollRunId String?                  @map("applied_payroll_run_id") @db.Uuid
+  status              PayrollAdjustmentStatus  @default(pending)
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+
+  employee          Employee    @relation(fields: [employeeId], references: [id])
+  appliedPayrollRun PayrollRun? @relation(fields: [appliedPayrollRunId], references: [id])
+
+  @@index([employeeId, periodYear, periodMonth, status])
+  @@map("payroll_adjustments")
+}
+
+model TaxCertificate {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId           String   @map("employee_id") @db.Uuid
+  fiscalYear           String   @map("fiscal_year")
+  totalGross           Int      @map("total_gross")
+  totalTaxable         Int      @map("total_taxable")
+  totalTaxDeducted     Int      @map("total_tax_deducted")
+  documentAttachmentId String?  @map("document_attachment_id") @db.Uuid
+  issuedAt             DateTime @map("issued_at")
+  issuedBy             String   @map("issued_by") @db.Uuid
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, fiscalYear])
+  @@map("tax_certificates")
+}
+
+model GratuityPolicy {
+  id                        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                      String
+  minServiceYears           Decimal                  @map("min_service_years") @db.Decimal(4, 2)
+  applicableEmploymentTypes String[]                 @map("applicable_employment_types")
+  daysPerYearOfService      Decimal                  @map("days_per_year_of_service") @db.Decimal(5, 2)
+  salaryBasis               GratuitySalaryBasis      @map("salary_basis")
+  prorationMethod           GratuityProrationMethod  @map("proration_method")
+  maxYearsCounted           Decimal?                 @map("max_years_counted") @db.Decimal(6, 3)
+  forfeitureOnTermination   Boolean                  @default(false) @map("forfeiture_on_termination")
+  forfeitureReasons         String[]                 @map("forfeiture_reasons")
+  effectiveFrom             DateTime                 @map("effective_from") @db.Date
+  effectiveTo               DateTime?                @map("effective_to") @db.Date
+  isActive                  Boolean                  @default(false) @map("is_active")
+  createdAt                 DateTime                 @default(now()) @map("created_at")
+  updatedAt                 DateTime                 @updatedAt @map("updated_at")
+
+  entitlements GratuityEntitlement[]
+  provisions   GratuityProvision[]
+  payments     GratuityPayment[]
+
+  @@index([isActive])
+  @@map("gratuity_policies")
+}
+
+model GratuityEntitlement {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId        String   @unique @map("employee_id") @db.Uuid
+  policyId          String   @map("policy_id") @db.Uuid
+  asOfDate          DateTime @map("as_of_date") @db.Date
+  yearsOfService    Decimal  @map("years_of_service") @db.Decimal(6, 3)
+  eligible          Boolean
+  salaryBasisAmount Int      @map("salary_basis_amount")
+  entitlementAmount Int      @map("entitlement_amount")
+  computedAt        DateTime @map("computed_at")
+
+  employee Employee       @relation(fields: [employeeId], references: [id])
+  policy   GratuityPolicy @relation(fields: [policyId], references: [id])
+
+  @@index([eligible])
+  @@map("gratuity_entitlements")
+}
+
+model GratuityProvision {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId             String   @map("employee_id") @db.Uuid
+  policyId               String   @map("policy_id") @db.Uuid
+  provisionYear          Int      @map("provision_year")
+  provisionMonth         Int      @map("provision_month")
+  salaryBasisAmount      Int      @map("salary_basis_amount")
+  yearsOfServiceAtMonth  Decimal  @map("years_of_service_at_month") @db.Decimal(6, 3)
+  entitlementAtMonth     Int      @map("entitlement_at_month")
+  provisionAmount        Int      @map("provision_amount")
+  cumulativeTotal        Int      @map("cumulative_total")
+  adjustmentAmount       Int      @default(0) @map("adjustment_amount")
+  adjustmentReason       String?  @map("adjustment_reason")
+  journalId              String?  @map("journal_id") @db.Uuid
+  computedAt             DateTime @map("computed_at")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  employee Employee       @relation(fields: [employeeId], references: [id])
+  policy   GratuityPolicy @relation(fields: [policyId], references: [id])
+
+  @@unique([employeeId, provisionYear, provisionMonth])
+  @@index([employeeId, provisionYear, provisionMonth])
+  @@map("gratuity_provisions")
+}
+
+model GratuityPayment {
+  id                          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId                  String   @unique @map("employee_id") @db.Uuid
+  policyId                    String   @map("policy_id") @db.Uuid
+  salaryBasisAmount           Int      @map("salary_basis_amount")
+  grossAmount                 Int      @map("gross_amount")
+  forfeitedAmount             Int      @default(0) @map("forfeited_amount")
+  forfeitureReason            String?  @map("forfeiture_reason")
+  deductionsAmount            Int      @default(0) @map("deductions_amount")
+  deductionDetail             Json?    @map("deduction_detail")
+  cumulativeProvisionAtExit   Int      @map("cumulative_provision_at_exit")
+  netPayable                  Int      @map("net_payable")
+  voucherId                   String?  @map("voucher_id") @db.Uuid
+  journalId                   String?  @map("journal_id") @db.Uuid
+  settlementLetterAttachmentId String? @map("settlement_letter_attachment_id") @db.Uuid
+  approvedBy                  String?  @map("approved_by") @db.Uuid
+  paidAt                      DateTime? @map("paid_at")
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+
+  employee Employee       @relation(fields: [employeeId], references: [id])
+  policy   GratuityPolicy @relation(fields: [policyId], references: [id])
+
+  @@map("gratuity_payments")
+}
+
+model GratuityLedger {
+  id             String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId     String                  @map("employee_id") @db.Uuid
+  entryDate      DateTime                @map("entry_date") @db.Date
+  entryType      GratuityLedgerEntryType @map("entry_type")
+  amount         Int
+  runningBalance Int                     @map("running_balance")
+  referenceType  String?                 @map("reference_type")
+  referenceId    String?                 @map("reference_id") @db.Uuid
+  narration      String?
+  journalId      String?                 @map("journal_id") @db.Uuid
+  createdAt      DateTime                @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, entryDate])
+  @@map("gratuity_ledger")
+}
+
+model EncashmentRequest {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId           String            @map("employee_id") @db.Uuid
+  leaveTypeId          String            @map("leave_type_id") @db.Uuid
+  year                 Int
+  requestedDays        Decimal           @map("requested_days") @db.Decimal(5, 2)
+  eligibleDays         Decimal           @map("eligible_days") @db.Decimal(5, 2)
+  perDayAmount         Int               @map("per_day_amount")
+  calculatedAmount     Int               @map("calculated_amount")
+  approvedAmount       Int?              @map("approved_amount")
+  status               EncashmentStatus  @default(pending)
+  trigger              EncashmentTrigger @default(employee_request)
+  currentApprovalLevel Int               @default(1) @map("current_approval_level")
+  rejectionReason      String?           @map("rejection_reason")
+  payrollRunId         String?           @map("payroll_run_id") @db.Uuid
+  payrollAdjustmentId  String?           @map("payroll_adjustment_id") @db.Uuid
+  journalId            String?           @map("journal_id") @db.Uuid
+  requestedAt          DateTime          @default(now()) @map("requested_at")
+  processedAt          DateTime?         @map("processed_at")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  employee      Employee                 @relation(fields: [employeeId], references: [id])
+  leaveType     LeaveType                @relation(fields: [leaveTypeId], references: [id])
+  payrollRun    PayrollRun?              @relation(fields: [payrollRunId], references: [id])
+  approvalSteps EncashmentApprovalStep[]
+
+  @@index([employeeId, status])
+  @@index([status, requestedAt])
+  @@map("encashment_requests")
+}
+
+model EncashmentApprovalStep {
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  encashmentRequestId String           @map("encashment_request_id") @db.Uuid
+  level               Int
+  approverRole        String           @map("approver_role")
+  approverUserId      String?          @map("approver_user_id") @db.Uuid
+  decision            ApprovalDecision @default(pending)
+  decidedAt           DateTime?        @map("decided_at")
+  comment             String?
+
+  encashmentRequest EncashmentRequest @relation(fields: [encashmentRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([encashmentRequestId, level])
+  @@map("encashment_approval_steps")
+}
+
+model ReviewCycle {
+  id                       String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                     String
+  cycleType                ReviewCycleType   @map("cycle_type")
+  periodStart              DateTime          @map("period_start") @db.Date
+  periodEnd                DateTime          @map("period_end") @db.Date
+  selfAppraisalDeadline    DateTime          @map("self_appraisal_deadline") @db.Date
+  managerAppraisalDeadline DateTime          @map("manager_appraisal_deadline") @db.Date
+  status                   ReviewCycleStatus @default(planned)
+  createdAt                DateTime          @default(now()) @map("created_at")
+  updatedAt                DateTime          @updatedAt @map("updated_at")
+
+  appraisals Appraisal[]
+
+  @@map("review_cycles")
+}
+
+model Kpi {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  description     String?
+  department      String?
+  designation     String?
+  measurementType KpiMeasurementType @map("measurement_type")
+  weightPercent   Decimal            @map("weight_percent") @db.Decimal(5, 2)
+  targetValue     String?            @map("target_value")
+  isActive        Boolean            @default(true) @map("is_active")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  scores AppraisalKpiScore[]
+
+  @@map("kpis")
+}
+
+model Appraisal {
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reviewCycleId          String                @map("review_cycle_id") @db.Uuid
+  employeeId             String                @map("employee_id") @db.Uuid
+  reviewerUserId         String?               @map("reviewer_user_id") @db.Uuid
+  selfSubmittedAt        DateTime?             @map("self_submitted_at")
+  managerSubmittedAt     DateTime?             @map("manager_submitted_at")
+  selfOverallRating      Decimal?              @map("self_overall_rating") @db.Decimal(5, 2)
+  managerOverallRating   Decimal?              @map("manager_overall_rating") @db.Decimal(5, 2)
+  finalScore             Decimal?              @map("final_score") @db.Decimal(5, 2)
+  finalRating            AppraisalFinalRating? @map("final_rating")
+  strengths              String?
+  improvementAreas       String?               @map("improvement_areas")
+  status                 AppraisalStatus       @default(draft)
+  employeeAcknowledgedAt DateTime?             @map("employee_acknowledged_at")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
+
+  reviewCycle ReviewCycle              @relation(fields: [reviewCycleId], references: [id])
+  employee    Employee                 @relation(fields: [employeeId], references: [id])
+  kpiScores   AppraisalKpiScore[]
+  feedback360 Feedback360[]
+  increments  IncrementRecommendation[]
+
+  @@unique([reviewCycleId, employeeId])
+  @@index([reviewCycleId, employeeId])
+  @@index([status])
+  @@map("appraisals")
+}
+
+model AppraisalKpiScore {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appraisalId   String   @map("appraisal_id") @db.Uuid
+  kpiId         String   @map("kpi_id") @db.Uuid
+  selfScore     Decimal? @map("self_score") @db.Decimal(5, 2)
+  managerScore  Decimal? @map("manager_score") @db.Decimal(5, 2)
+  weightedScore Decimal? @map("weighted_score") @db.Decimal(8, 4)
+  comment       String?
+
+  appraisal Appraisal @relation(fields: [appraisalId], references: [id], onDelete: Cascade)
+  kpi       Kpi       @relation(fields: [kpiId], references: [id])
+
+  @@unique([appraisalId, kpiId])
+  @@map("appraisal_kpi_scores")
+}
+
+model Feedback360 {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appraisalId            String                 @map("appraisal_id") @db.Uuid
+  feedbackProviderUserId String                 @map("feedback_provider_user_id") @db.Uuid
+  relationship           Feedback360Relationship
+  responses              Json
+  isAnonymous            Boolean                @default(true) @map("is_anonymous")
+  submittedAt            DateTime               @default(now()) @map("submitted_at")
+
+  appraisal Appraisal @relation(fields: [appraisalId], references: [id], onDelete: Cascade)
+
+  @@map("feedback_360")
+}
+
+model IncrementRecommendation {
+  id                      String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appraisalId             String                        @map("appraisal_id") @db.Uuid
+  employeeId              String                        @map("employee_id") @db.Uuid
+  recommendedPercent      Decimal                       @map("recommended_percent") @db.Decimal(5, 2)
+  recommendedAmount       Int                           @map("recommended_amount")
+  justification           String?
+  status                  IncrementRecommendationStatus @default(pending)
+  approvedBy              String?                       @map("approved_by") @db.Uuid
+  appliedSalaryStructureId String?                      @map("applied_salary_structure_id") @db.Uuid
+  createdAt               DateTime                      @default(now()) @map("created_at")
+  updatedAt               DateTime                      @updatedAt @map("updated_at")
+
+  appraisal              Appraisal        @relation(fields: [appraisalId], references: [id])
+  employee               Employee         @relation(fields: [employeeId], references: [id])
+  appliedSalaryStructure SalaryStructure? @relation(fields: [appliedSalaryStructureId], references: [id])
+
+  @@map("increment_recommendations")
+}
+
+model JobRequisition {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requisitionNumber String              @unique @map("requisition_number")
+  title            String
+  department       String
+  designation      String
+  positionsCount   Int                  @map("positions_count")
+  filledCount      Int                  @default(0) @map("filled_count")
+  employmentType   String               @map("employment_type")
+  justification    String?
+  budgetLineId     String?              @map("budget_line_id") @db.Uuid
+  salaryRangeMin   Int?                 @map("salary_range_min")
+  salaryRangeMax   Int?                 @map("salary_range_max")
+  requiredByDate   DateTime?            @map("required_by_date") @db.Date
+  status           JobRequisitionStatus @default(draft)
+  raisedBy         String               @map("raised_by") @db.Uuid
+  approvedBy       String?              @map("approved_by") @db.Uuid
+  approvedAt       DateTime?            @map("approved_at")
+  rejectionReason  String?              @map("rejection_reason")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  postings JobPosting[]
+
+  @@map("job_requisitions")
+}
+
+model JobPosting {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requisitionId String          @map("requisition_id") @db.Uuid
+  title        String
+  description  String
+  requirements String?
+  postedDate   DateTime?        @map("posted_date") @db.Date
+  closingDate  DateTime?        @map("closing_date") @db.Date
+  channels     String[]
+  status       JobPostingStatus @default(draft)
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  requisition JobRequisition @relation(fields: [requisitionId], references: [id])
+  applicants  Applicant[]
+
+  @@map("job_postings")
+}
+
+model Applicant {
+  id                   String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  postingId            String         @map("posting_id") @db.Uuid
+  applicationNumber    String         @unique @map("application_number")
+  fullName             String         @map("full_name")
+  email                String
+  phone                String?
+  resumeAttachmentId   String?        @map("resume_attachment_id") @db.Uuid
+  expectedSalary       Int?           @map("expected_salary")
+  noticePeriodDays     Int?           @map("notice_period_days")
+  source               String?
+  stage                ApplicantStage @default(applied)
+  stageChangedAt       DateTime       @default(now()) @map("stage_changed_at")
+  rejectionReason      String?        @map("rejection_reason")
+  convertedEmployeeId  String?        @map("converted_employee_id") @db.Uuid
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  posting    JobPosting @relation(fields: [postingId], references: [id])
+  interviews Interview[]
+  offers     Offer[]
+
+  @@index([postingId, stage])
+  @@map("applicants")
+}
+
+model Interview {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicantId     String                  @map("applicant_id") @db.Uuid
+  roundNumber     Int                     @map("round_number")
+  interviewType   InterviewType           @map("interview_type")
+  scheduledAt     DateTime                @map("scheduled_at")
+  durationMinutes Int                     @default(60) @map("duration_minutes")
+  mode            InterviewMode
+  location        String?
+  panelUserIds    String[]                @map("panel_user_ids") @db.Uuid
+  status          InterviewStatus         @default(scheduled)
+  overallRating   Decimal?                @map("overall_rating") @db.Decimal(5, 2)
+  recommendation  InterviewRecommendation?
+  notes           String?
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+
+  applicant Applicant @relation(fields: [applicantId], references: [id])
+
+  @@index([scheduledAt, status])
+  @@map("interviews")
+}
+
+model Offer {
+  id                     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicantId            String      @map("applicant_id") @db.Uuid
+  offeredDesignation     String      @map("offered_designation")
+  offeredDepartment      String      @map("offered_department")
+  offeredSalaryStructure Json        @map("offered_salary_structure")
+  joiningDate            DateTime    @map("joining_date") @db.Date
+  validUntil             DateTime    @map("valid_until") @db.Date
+  status                 OfferStatus @default(draft)
+  documentAttachmentId   String?     @map("document_attachment_id") @db.Uuid
+  approvedBy             String?     @map("approved_by") @db.Uuid
+  sentAt                 DateTime?   @map("sent_at")
+  respondedAt            DateTime?   @map("responded_at")
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
+
+  applicant Applicant @relation(fields: [applicantId], references: [id])
+
+  @@map("offers")
+}
+
+model TrainingProgram {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String
+  programType       TrainingProgramType   @map("program_type")
+  provider          String?
+  description       String?
+  startDate         DateTime              @map("start_date") @db.Date
+  endDate           DateTime              @map("end_date") @db.Date
+  durationHours     Decimal               @map("duration_hours") @db.Decimal(6, 2)
+  venue             String?
+  maxParticipants   Int                   @map("max_participants")
+  costPerParticipant Int?                 @map("cost_per_participant")
+  totalBudget       Int?                  @map("total_budget")
+  budgetLineId      String?               @map("budget_line_id") @db.Uuid
+  status            TrainingProgramStatus @default(planned)
+  trainerName       String?               @map("trainer_name")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  enrollments TrainingEnrollment[]
+  sessions    TrainingSession[]
+  costs       TrainingCost[]
+
+  @@map("training_programs")
+}
+
+model TrainingEnrollment {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  programId              String                   @map("program_id") @db.Uuid
+  employeeId             String                   @map("employee_id") @db.Uuid
+  enrolledAt             DateTime                 @default(now()) @map("enrolled_at")
+  enrolledBy             String                   @map("enrolled_by") @db.Uuid
+  status                 TrainingEnrollmentStatus @default(enrolled)
+  completionPercentage   Decimal                  @default(0) @map("completion_percentage") @db.Decimal(5, 2)
+  certificateAttachmentId String?                 @map("certificate_attachment_id") @db.Uuid
+  feedbackRating         Decimal?                 @map("feedback_rating") @db.Decimal(3, 1)
+  feedbackComment        String?                  @map("feedback_comment")
+
+  program  TrainingProgram @relation(fields: [programId], references: [id])
+  employee Employee        @relation(fields: [employeeId], references: [id])
+
+  @@unique([programId, employeeId])
+  @@map("training_enrollments")
+}
+
+model TrainingSession {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  programId   String   @map("program_id") @db.Uuid
+  sessionDate DateTime @map("session_date") @db.Date
+  startTime   DateTime @map("start_time") @db.Time(0)
+  endTime     DateTime @map("end_time") @db.Time(0)
+  topic       String?
+
+  program    TrainingProgram     @relation(fields: [programId], references: [id], onDelete: Cascade)
+  attendance TrainingAttendance[]
+
+  @@map("training_sessions")
+}
+
+model TrainingAttendance {
+  id         String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId  String                   @map("session_id") @db.Uuid
+  employeeId String                   @map("employee_id") @db.Uuid
+  status     TrainingAttendanceStatus
+  markedBy   String                   @map("marked_by") @db.Uuid
+
+  session  TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  employee Employee        @relation(fields: [employeeId], references: [id])
+
+  @@unique([sessionId, employeeId])
+  @@map("training_attendance")
+}
+
+model TrainingCost {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  programId    String           @map("program_id") @db.Uuid
+  costType     TrainingCostType @map("cost_type")
+  amount       Int
+  vendorName   String?          @map("vendor_name")
+  journalId    String?          @map("journal_id") @db.Uuid
+  incurredDate DateTime         @map("incurred_date") @db.Date
+
+  program TrainingProgram @relation(fields: [programId], references: [id])
+
+  @@map("training_costs")
+}
+
+model BenefitPlan {
+  id                          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                        String
+  benefitType                 BenefitType @map("benefit_type")
+  provider                    String?
+  coverageSummary             String?     @map("coverage_summary")
+  coverageAmount              Int?        @map("coverage_amount")
+  employeeContributionAmount  Int         @default(0) @map("employee_contribution_amount")
+  employerContributionAmount  Int         @default(0) @map("employer_contribution_amount")
+  policyNumber                String?     @map("policy_number")
+  policyStartDate             DateTime?   @map("policy_start_date") @db.Date
+  policyExpiryDate            DateTime?   @map("policy_expiry_date") @db.Date
+  isActive                    Boolean     @default(true) @map("is_active")
+  createdAt                   DateTime    @default(now()) @map("created_at")
+  updatedAt                   DateTime    @updatedAt @map("updated_at")
+
+  enrollments BenefitEnrollment[]
+
+  @@map("benefit_plans")
+}
+
+model BenefitEnrollment {
+  id            String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  benefitPlanId String                  @map("benefit_plan_id") @db.Uuid
+  employeeId    String                  @map("employee_id") @db.Uuid
+  enrolledFrom  DateTime                @map("enrolled_from") @db.Date
+  enrolledTo    DateTime?               @map("enrolled_to") @db.Date
+  dependents    Json?
+  status        BenefitEnrollmentStatus @default(active)
+
+  benefitPlan BenefitPlan @relation(fields: [benefitPlanId], references: [id])
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+
+  @@unique([benefitPlanId, employeeId, enrolledFrom])
+  @@map("benefit_enrollments")
+}
+
+model EmployeeLoan {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId          String             @map("employee_id") @db.Uuid
+  loanType            EmployeeLoanType   @map("loan_type")
+  principalAmount     Int                @map("principal_amount")
+  interestRatePercent Decimal            @default(0) @map("interest_rate_percent") @db.Decimal(6, 3)
+  installmentCount    Int                @map("installment_count")
+  installmentAmount   Int                @map("installment_amount")
+  disbursedDate       DateTime?          @map("disbursed_date") @db.Date
+  firstDeductionMonth Int?               @map("first_deduction_month")
+  firstDeductionYear  Int?               @map("first_deduction_year")
+  outstandingAmount   Int                @map("outstanding_amount")
+  status              EmployeeLoanStatus @default(requested)
+  purpose             String?
+  approvedBy          String?            @map("approved_by") @db.Uuid
+  voucherId           String?            @map("voucher_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  employee   Employee        @relation(fields: [employeeId], references: [id])
+  repayments LoanRepayment[]
+
+  @@index([employeeId, status])
+  @@map("employee_loans")
+}
+
+model LoanRepayment {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loanId            String              @map("loan_id") @db.Uuid
+  installmentNumber Int                 @map("installment_number")
+  dueMonth          Int                 @map("due_month")
+  dueYear           Int                 @map("due_year")
+  scheduledAmount   Int                 @map("scheduled_amount")
+  paidAmount        Int                 @default(0) @map("paid_amount")
+  payrollSlipId     String?             @map("payroll_slip_id") @db.Uuid
+  status            LoanRepaymentStatus @default(scheduled)
+  deductedAt        DateTime?           @map("deducted_at")
+
+  loan        EmployeeLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  payrollSlip PayrollSlip? @relation(fields: [payrollSlipId], references: [id])
+
+  @@unique([loanId, installmentNumber])
+  @@index([dueYear, dueMonth, status])
+  @@map("loan_repayments")
+}

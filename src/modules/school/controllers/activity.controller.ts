@@ -82,10 +82,7 @@ export class ActivityController {
     'principal',
   )
   @Permissions('school:read')
-  list(
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
+  list(@Query('from') from?: string, @Query('to') to?: string) {
     return this.activities.list({
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,

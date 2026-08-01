@@ -1,0 +1,13 @@
+rules:
+  - id: no-cross-module-prisma
+    patterns:
+      - pattern: this.prisma.$MODEL.$METHOD(...)
+    message: >
+      Prefer module-owned repositories / read façades over reaching into foreign Prisma models
+      from unrelated modules. Review cross-module prisma access carefully.
+    languages: [typescript]
+    severity: WARNING
+    paths:
+      include:
+        - src/modules/reports/services/**
+        - src/modules/reports/handlers/**

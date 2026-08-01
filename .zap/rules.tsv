@@ -1,0 +1,3 @@
+# ZAP baseline exceptions — each line must include a justification comment above it.
+# Format: ruleId  OUTOFSCOPE|IGNORE  # reason
+# Empty file means all high findings fail the scan.

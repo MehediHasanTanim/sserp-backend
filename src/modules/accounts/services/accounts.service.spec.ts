@@ -1,5 +1,8 @@
 import { AccountsService, JournalLineInput } from './accounts.service';
-import { DomainException, ErrorCode } from '../../../shared/errors/domain-exception';
+import {
+  DomainException,
+  ErrorCode,
+} from '../../../shared/errors/domain-exception';
 
 describe('AccountsService', () => {
   let service: AccountsService;
@@ -29,7 +32,9 @@ describe('AccountsService', () => {
   beforeEach(() => {
     numbering = { nextCode: jest.fn().mockResolvedValue('JE-000001') };
     fiscalPeriods = {
-      requireOpenForDate: jest.fn().mockResolvedValue({ id: 'fp1', status: 'open' }),
+      requireOpenForDate: jest
+        .fn()
+        .mockResolvedValue({ id: 'fp1', status: 'open' }),
     };
     postingRules = {
       resolve: jest.fn().mockResolvedValue({
@@ -63,8 +68,10 @@ describe('AccountsService', () => {
       },
       chartOfAccount: {
         findUnique: jest.fn().mockImplementation(({ where }: any) => {
-          if (where.accountCode === '1210' || where.id === 'acc-dr') return debitAccount;
-          if (where.accountCode === '4200' || where.id === 'acc-cr') return creditAccount;
+          if (where.accountCode === '1210' || where.id === 'acc-dr')
+            return debitAccount;
+          if (where.accountCode === '4200' || where.id === 'acc-cr')
+            return creditAccount;
           return null;
         }),
         findMany: jest.fn().mockResolvedValue([debitAccount, creditAccount]),
@@ -74,8 +81,18 @@ describe('AccountsService', () => {
 
   function balancedLines(): JournalLineInput[] {
     return [
-      { accountId: 'acc-dr', debitAmount: 1000, creditAmount: 0, costCenter: 'school' },
-      { accountId: 'acc-cr', debitAmount: 0, creditAmount: 1000, costCenter: 'school' },
+      {
+        accountId: 'acc-dr',
+        debitAmount: 1000,
+        creditAmount: 0,
+        costCenter: 'school',
+      },
+      {
+        accountId: 'acc-cr',
+        debitAmount: 0,
+        creditAmount: 1000,
+        costCenter: 'school',
+      },
     ];
   }
 
@@ -104,8 +121,18 @@ describe('AccountsService', () => {
           description: 'bad',
           costCenter: 'school',
           lines: [
-            { accountId: 'acc-dr', debitAmount: 1001, creditAmount: 0, costCenter: 'school' },
-            { accountId: 'acc-cr', debitAmount: 0, creditAmount: 1000, costCenter: 'school' },
+            {
+              accountId: 'acc-dr',
+              debitAmount: 1001,
+              creditAmount: 0,
+              costCenter: 'school',
+            },
+            {
+              accountId: 'acc-cr',
+              debitAmount: 0,
+              creditAmount: 1000,
+              costCenter: 'school',
+            },
           ],
         },
         tx,

@@ -8,7 +8,12 @@ import { PdfProcessor } from './pdf/pdf.processor';
 @Module({
   imports: [BullModule.registerQueue({ name: 'pdf' })],
   controllers: [FilesController],
-  providers: [MinioService, AttachmentService, PdfRendererService, PdfProcessor],
+  providers: [
+    MinioService,
+    AttachmentService,
+    PdfRendererService,
+    PdfProcessor,
+  ],
   exports: [MinioService, AttachmentService, PdfRendererService],
 })
 export class FilesModule {}

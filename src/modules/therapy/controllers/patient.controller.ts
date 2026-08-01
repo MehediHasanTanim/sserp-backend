@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Put,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { CurrentUser, AuthUser, Roles } from '../../../shared/decorators';
 import { PatientService } from '../services/patient.service';
 
@@ -51,7 +44,10 @@ export class PatientController {
     @Body() body: any,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.patientService.addConsent(patientId, { ...body, signedBy: user.id });
+    return this.patientService.addConsent(patientId, {
+      ...body,
+      signedBy: user.id,
+    });
   }
 
   @Post(':id/referrals')

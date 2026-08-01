@@ -28,7 +28,9 @@ export class RecurringJournalService {
   }
 
   async findById(id: string) {
-    const t = await this.prisma.recurringJournalTemplate.findUnique({ where: { id } });
+    const t = await this.prisma.recurringJournalTemplate.findUnique({
+      where: { id },
+    });
     if (!t) throw DomainException.notFound('Recurring template not found');
     return t;
   }
@@ -88,7 +90,10 @@ export class RecurringJournalService {
         },
         template.createdBy,
       );
-      const nextRunDate = this.advanceDate(template.nextRunDate, template.frequency);
+      const nextRunDate = this.advanceDate(
+        template.nextRunDate,
+        template.frequency,
+      );
       await this.prisma.recurringJournalTemplate.update({
         where: { id: template.id },
         data: { nextRunDate, lastGeneratedJournalId: draft.id },

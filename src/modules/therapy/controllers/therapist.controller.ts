@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import { TherapyType } from '@prisma/client';
 import { CurrentUser } from '../../../shared/decorators';
@@ -29,6 +30,19 @@ export class TherapistController {
     return this.therapistService.list();
   }
 
+  @Get(':id/performance')
+  performance(
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.therapistService.performanceSummary(
+      id,
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
+    );
+  }
+
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.therapistService.findById(id);
@@ -36,8 +50,14 @@ export class TherapistController {
 
   @Post(':id/specializations')
   @Roles('admin', 'therapy_coordinator')
-  addSpecialization(@Param('id') therapistId: string, @Body() body: { therapyType: TherapyType }) {
-    return this.therapistService.addSpecialization({ therapistId, therapyType: body.therapyType });
+  addSpecialization(
+    @Param('id') therapistId: string,
+    @Body() body: { therapyType: TherapyType },
+  ) {
+    return this.therapistService.addSpecialization({
+      therapistId,
+      therapyType: body.therapyType,
+    });
   }
 
   @Delete(':id/specializations/:therapyType')
@@ -56,7 +76,10 @@ export class TherapistController {
 
   @Put(':id/availability')
   setAvailability(@Param('id') therapistId: string, @Body() body: any) {
-    return this.therapistService.setAvailability({ therapistId, slots: body.slots });
+    return this.therapistService.setAvailability({
+      therapistId,
+      slots: body.slots,
+    });
   }
 
   @Delete(':id')

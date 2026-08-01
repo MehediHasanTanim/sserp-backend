@@ -1,0 +1,362 @@
+// Phase 6 — Procurement: Vendors, PR, PO, GRN, Invoices, Payments
+
+model Vendor {
+  id                     String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorCode             String       @unique @map("vendor_code")
+  name                   String
+  vendorType             VendorType   @map("vendor_type")
+  categories             String[]
+  contactPerson          String?      @map("contact_person")
+  phone                  String?
+  email                  String?
+  address                String?
+  taxRegistrationNumber  String?      @map("tax_registration_number")
+  bankDetails            Json?        @map("bank_details")
+  paymentTermsDays       Int?         @map("payment_terms_days")
+  isPreferred            Boolean      @default(false) @map("is_preferred")
+  performanceScore       Decimal?     @map("performance_score") @db.Decimal(4, 2)
+  status                 VendorStatus @default(active)
+  blacklistReason        String?      @map("blacklist_reason")
+  blacklistedAt          DateTime?    @map("blacklisted_at")
+  coaPayableAccountCode  String?      @map("coa_payable_account_code") @db.VarChar(20)
+  deletedAt              DateTime?    @map("deleted_at")
+  createdAt              DateTime     @default(now()) @map("created_at")
+  updatedAt              DateTime     @updatedAt @map("updated_at")
+
+  documents          VendorDocument[]
+  performanceRatings VendorPerformanceRating[]
+  purchaseOrders     PurchaseOrder[]
+  goodsReceiptNotes  GoodsReceiptNote[]
+  vendorInvoices     VendorInvoice[]
+  vendorPayments     VendorPayment[]
+  vendorAdvances     VendorAdvance[]
+
+  @@index([vendorCode])
+  @@index([status, isPreferred])
+  @@map("vendors")
+}
+
+model VendorDocument {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId     String             @map("vendor_id") @db.Uuid
+  documentType VendorDocumentType @map("document_type")
+  attachmentId String             @map("attachment_id") @db.Uuid
+  issuedDate   DateTime?          @map("issued_date") @db.Date
+  expiryDate   DateTime?          @map("expiry_date") @db.Date
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@map("vendor_documents")
+}
+
+model VendorPerformanceRating {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId                String   @map("vendor_id") @db.Uuid
+  poId                    String   @map("po_id") @db.Uuid
+  deliveryTimelinessScore Decimal  @map("delivery_timeliness_score") @db.Decimal(4, 2)
+  qualityScore            Decimal  @map("quality_score") @db.Decimal(4, 2)
+  pricingScore            Decimal  @map("pricing_score") @db.Decimal(4, 2)
+  responsivenessScore     Decimal  @map("responsiveness_score") @db.Decimal(4, 2)
+  overallScore            Decimal  @map("overall_score") @db.Decimal(4, 2)
+  comments                String?
+  ratedBy                 String   @map("rated_by") @db.Uuid
+  ratedAt                 DateTime @map("rated_at")
+
+  vendor Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  po     PurchaseOrder @relation(fields: [poId], references: [id])
+
+  @@map("vendor_performance_ratings")
+}
+
+model PurchaseRequest {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  prNumber            String                @unique @map("pr_number")
+  requestedBy         String                @map("requested_by") @db.Uuid
+  department          String
+  requiredByDate      DateTime?             @map("required_by_date") @db.Date
+  justification       String?
+  estimatedTotal      Int                   @default(0) @map("estimated_total")
+  budgetLineId        String?               @map("budget_line_id") @db.Uuid
+  status              PurchaseRequestStatus @default(draft)
+  deptReviewedBy      String?               @map("dept_reviewed_by") @db.Uuid
+  deptReviewedAt      DateTime?             @map("dept_reviewed_at")
+  deptReviewComment   String?               @map("dept_review_comment")
+  approvedBy          String?               @map("approved_by") @db.Uuid
+  approvedAt          DateTime?             @map("approved_at")
+  approvalComment     String?               @map("approval_comment")
+  rejectionReason     String?               @map("rejection_reason")
+  budgetCheckResult   Json?                 @map("budget_check_result")
+  attachmentId        String?               @map("attachment_id") @db.Uuid
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+
+  lines PurchaseRequestLine[]
+
+  @@index([status, createdAt])
+  @@index([requestedBy])
+  @@index([department, status])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestLine {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  prId               String  @map("pr_id") @db.Uuid
+  itemId             String? @map("item_id") @db.Uuid
+  itemDescription    String  @map("item_description")
+  quantity           Decimal @db.Decimal(14, 3)
+  unitOfMeasureId    String? @map("unit_of_measure_id") @db.Uuid
+  estimatedUnitCost  Int     @default(0) @map("estimated_unit_cost")
+  estimatedTotal     Int     @default(0) @map("estimated_total")
+  poIssuedQuantity   Decimal @default(0) @map("po_issued_quantity") @db.Decimal(14, 3)
+  remarks            String?
+
+  purchaseRequest PurchaseRequest      @relation(fields: [prId], references: [id], onDelete: Cascade)
+  item            Item?                @relation(fields: [itemId], references: [id])
+  unitOfMeasure   UnitOfMeasure?       @relation(fields: [unitOfMeasureId], references: [id])
+  purchaseOrderLines PurchaseOrderLine[]
+
+  @@map("purchase_request_lines")
+}
+
+model PurchaseOrder {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  poNumber              String              @unique @map("po_number")
+  vendorId              String              @map("vendor_id") @db.Uuid
+  poDate                DateTime            @map("po_date") @db.Date
+  expectedDeliveryDate  DateTime?           @map("expected_delivery_date") @db.Date
+  deliveryAddress       String?             @map("delivery_address")
+  paymentTerms          String?             @map("payment_terms")
+  subtotalAmount        Int                 @default(0) @map("subtotal_amount")
+  taxAmount             Int                 @default(0) @map("tax_amount")
+  discountAmount        Int                 @default(0) @map("discount_amount")
+  totalAmount           Int                 @default(0) @map("total_amount")
+  currencyCode          String              @default("BDT") @map("currency_code") @db.VarChar(3)
+  version               Int                 @default(1)
+  previousVersionId     String?             @map("previous_version_id") @db.Uuid
+  status                PurchaseOrderStatus @default(draft)
+  approvedBy            String?             @map("approved_by") @db.Uuid
+  approvedAt            DateTime?           @map("approved_at")
+  sentAt                DateTime?           @map("sent_at")
+  cancellationReason    String?             @map("cancellation_reason")
+  journalId             String?             @map("journal_id") @db.Uuid
+  documentAttachmentId  String?             @map("document_attachment_id") @db.Uuid
+  createdBy             String              @map("created_by") @db.Uuid
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+
+  vendor             Vendor                     @relation(fields: [vendorId], references: [id])
+  previousVersion    PurchaseOrder?             @relation("PoVersionChain", fields: [previousVersionId], references: [id])
+  nextVersions       PurchaseOrder[]            @relation("PoVersionChain")
+  lines              PurchaseOrderLine[]
+  amendments         PoAmendment[]
+  performanceRatings VendorPerformanceRating[]
+  goodsReceiptNotes  GoodsReceiptNote[]
+  vendorInvoices     VendorInvoice[]
+  vendorAdvances     VendorAdvance[]
+
+  @@index([vendorId, status])
+  @@index([poDate])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  poId              String  @map("po_id") @db.Uuid
+  prLineId          String? @map("pr_line_id") @db.Uuid
+  itemId            String  @map("item_id") @db.Uuid
+  itemDescription   String  @map("item_description")
+  quantity          Decimal @db.Decimal(14, 3)
+  unitOfMeasureId   String? @map("unit_of_measure_id") @db.Uuid
+  unitPrice         Int     @map("unit_price")
+  taxId             String? @map("tax_id") @db.Uuid
+  lineTotal         Int     @map("line_total")
+  receivedQuantity  Decimal @default(0) @map("received_quantity") @db.Decimal(14, 3)
+  rejectedQuantity  Decimal @default(0) @map("rejected_quantity") @db.Decimal(14, 3)
+  invoicedQuantity  Decimal @default(0) @map("invoiced_quantity") @db.Decimal(14, 3)
+
+  purchaseOrder      PurchaseOrder       @relation(fields: [poId], references: [id], onDelete: Cascade)
+  purchaseRequestLine PurchaseRequestLine? @relation(fields: [prLineId], references: [id])
+  item               Item                @relation(fields: [itemId], references: [id])
+  unitOfMeasure      UnitOfMeasure?      @relation(fields: [unitOfMeasureId], references: [id])
+  grnLines           GrnLine[]
+  vendorInvoiceLines VendorInvoiceLine[]
+
+  @@map("purchase_order_lines")
+}
+
+model PoAmendment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  poId        String   @map("po_id") @db.Uuid
+  fromVersion Int      @map("from_version")
+  toVersion   Int      @map("to_version")
+  changes     Json
+  reason      String
+  amendedBy   String   @map("amended_by") @db.Uuid
+  approvedBy  String?  @map("approved_by") @db.Uuid
+  amendedAt   DateTime @map("amended_at")
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+
+  @@map("po_amendments")
+}
+
+model GoodsReceiptNote {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  grnNumber             String    @unique @map("grn_number")
+  poId                  String    @map("po_id") @db.Uuid
+  vendorId              String    @map("vendor_id") @db.Uuid
+  receiptDate           DateTime  @map("receipt_date") @db.Date
+  deliveryNoteReference String?   @map("delivery_note_reference")
+  receivedAtLocationId  String    @map("received_at_location_id") @db.Uuid
+  isPartial             Boolean   @default(false) @map("is_partial")
+  status                GrnStatus @default(draft)
+  receivedBy            String    @map("received_by") @db.Uuid
+  qualityCheckedBy      String?   @map("quality_checked_by") @db.Uuid
+  postedAt              DateTime? @map("posted_at")
+  journalId             String?   @map("journal_id") @db.Uuid
+  attachmentId          String?   @map("attachment_id") @db.Uuid
+  remarks               String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  purchaseOrder      PurchaseOrder @relation(fields: [poId], references: [id])
+  vendor             Vendor        @relation(fields: [vendorId], references: [id])
+  receivedAtLocation Location      @relation(fields: [receivedAtLocationId], references: [id])
+  lines              GrnLine[]
+
+  @@map("goods_receipt_notes")
+}
+
+model GrnLine {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  grnId             String    @map("grn_id") @db.Uuid
+  poLineId          String    @map("po_line_id") @db.Uuid
+  itemId            String    @map("item_id") @db.Uuid
+  orderedQuantity   Decimal   @map("ordered_quantity") @db.Decimal(14, 3)
+  receivedQuantity  Decimal   @map("received_quantity") @db.Decimal(14, 3)
+  acceptedQuantity  Decimal   @default(0) @map("accepted_quantity") @db.Decimal(14, 3)
+  rejectedQuantity  Decimal   @default(0) @map("rejected_quantity") @db.Decimal(14, 3)
+  rejectionReason   String?   @map("rejection_reason")
+  unitCost          Int       @map("unit_cost")
+  batchNumber       String?   @map("batch_number")
+  expiryDate        DateTime? @map("expiry_date") @db.Date
+  serialNumbers     String[]  @map("serial_numbers")
+  stockMovementId   String?   @map("stock_movement_id") @db.Uuid
+
+  grn                GoodsReceiptNote    @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  purchaseOrderLine  PurchaseOrderLine   @relation(fields: [poLineId], references: [id])
+  item               Item                @relation(fields: [itemId], references: [id])
+  vendorInvoiceLines VendorInvoiceLine[]
+
+  @@index([poLineId])
+  @@map("grn_lines")
+}
+
+model VendorInvoice {
+  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceNumber          String              @unique @map("invoice_number")
+  vendorInvoiceReference String?             @map("vendor_invoice_reference")
+  vendorId               String              @map("vendor_id") @db.Uuid
+  poId                   String?             @map("po_id") @db.Uuid
+  grnIds                 String[]            @map("grn_ids") @db.Uuid
+  invoiceDate            DateTime            @map("invoice_date") @db.Date
+  dueDate                DateTime            @map("due_date") @db.Date
+  subtotalAmount         Int                 @default(0) @map("subtotal_amount")
+  taxAmount              Int                 @default(0) @map("tax_amount")
+  totalAmount            Int                 @default(0) @map("total_amount")
+  matchedAmount          Int                 @default(0) @map("matched_amount")
+  varianceAmount         Int                 @default(0) @map("variance_amount")
+  matchStatus            InvoiceMatchStatus  @default(unmatched) @map("match_status")
+  status                 VendorInvoiceStatus @default(draft)
+  approvedBy             String?             @map("approved_by") @db.Uuid
+  approvedAt             DateTime?           @map("approved_at")
+  rejectionReason        String?             @map("rejection_reason")
+  journalId              String?             @map("journal_id") @db.Uuid
+  attachmentId           String?             @map("attachment_id") @db.Uuid
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
+
+  vendor      Vendor                    @relation(fields: [vendorId], references: [id])
+  purchaseOrder PurchaseOrder?          @relation(fields: [poId], references: [id])
+  lines       VendorInvoiceLine[]
+  allocations VendorPaymentAllocation[]
+
+  @@index([vendorId, status])
+  @@index([dueDate, status])
+  @@index([matchStatus])
+  @@map("vendor_invoices")
+}
+
+model VendorInvoiceLine {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorInvoiceId String  @map("vendor_invoice_id") @db.Uuid
+  poLineId        String? @map("po_line_id") @db.Uuid
+  grnLineId       String? @map("grn_line_id") @db.Uuid
+  description     String
+  quantity        Decimal @db.Decimal(14, 3)
+  unitPrice       Int     @map("unit_price")
+  taxId           String? @map("tax_id") @db.Uuid
+  lineTotal       Int     @map("line_total")
+
+  vendorInvoice     VendorInvoice      @relation(fields: [vendorInvoiceId], references: [id], onDelete: Cascade)
+  purchaseOrderLine PurchaseOrderLine? @relation(fields: [poLineId], references: [id])
+  grnLine           GrnLine?           @relation(fields: [grnLineId], references: [id])
+
+  @@map("vendor_invoice_lines")
+}
+
+model VendorPayment {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentNumber String              @unique @map("payment_number")
+  vendorId      String              @map("vendor_id") @db.Uuid
+  paymentDate   DateTime?           @map("payment_date") @db.Date
+  amount        Int
+  method        PaymentMethod
+  reference     String?
+  bankAccountId String?             @map("bank_account_id") @db.Uuid
+  voucherId     String?             @map("voucher_id") @db.Uuid
+  journalId     String?             @map("journal_id") @db.Uuid
+  status        VendorPaymentStatus @default(scheduled)
+  scheduledDate DateTime?           @map("scheduled_date") @db.Date
+  paidBy        String?             @map("paid_by") @db.Uuid
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  vendor      Vendor                    @relation(fields: [vendorId], references: [id])
+  allocations VendorPaymentAllocation[]
+
+  @@map("vendor_payments")
+}
+
+model VendorPaymentAllocation {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorPaymentId String @map("vendor_payment_id") @db.Uuid
+  vendorInvoiceId String @map("vendor_invoice_id") @db.Uuid
+  allocatedAmount Int    @map("allocated_amount")
+
+  vendorPayment VendorPayment @relation(fields: [vendorPaymentId], references: [id], onDelete: Cascade)
+  vendorInvoice VendorInvoice @relation(fields: [vendorInvoiceId], references: [id])
+
+  @@map("vendor_payment_allocations")
+}
+
+model VendorAdvance {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId       String              @map("vendor_id") @db.Uuid
+  poId           String?             @map("po_id") @db.Uuid
+  amount         Int
+  advanceDate    DateTime            @map("advance_date") @db.Date
+  voucherId      String?             @map("voucher_id") @db.Uuid
+  journalId      String?             @map("journal_id") @db.Uuid
+  adjustedAmount Int                 @default(0) @map("adjusted_amount")
+  status         VendorAdvanceStatus @default(open)
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  vendor        Vendor         @relation(fields: [vendorId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [poId], references: [id])
+
+  @@map("vendor_advances")
+}

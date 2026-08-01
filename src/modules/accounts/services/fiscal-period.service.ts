@@ -78,24 +78,37 @@ export class FiscalPeriodService {
 
   async reopen(id: string, reason: string, reopenedBy: string) {
     if (!reason || reason.length < 20) {
-      throw DomainException.validation('Reopen reason must be at least 20 characters');
+      throw DomainException.validation(
+        'Reopen reason must be at least 20 characters',
+      );
     }
     const period = await this.findById(id);
-    if (period.status === 'open') throw DomainException.conflict('Period is already open');
+    if (period.status === 'open')
+      throw DomainException.conflict('Period is already open');
     const updated = await this.prisma.fiscalPeriod.update({
       where: { id },
       data: { status: 'open', closedBy: null, closedAt: null },
     });
-    this.events.emit(EventNames.PERIOD_REOPENED, { periodId: id, reason, reopenedBy });
+    this.events.emit(EventNames.PERIOD_REOPENED, {
+      periodId: id,
+      reason,
+      reopenedBy,
+    });
     return updated;
   }
 
   /** Ensure current calendar month period exists (seed helper). */
-  async ensureCurrentOpen(fiscalYearLabel: string, month: number, year: number) {
+  async ensureCurrentOpen(
+    fiscalYearLabel: string,
+    month: number,
+    year: number,
+  ) {
     const start = new Date(Date.UTC(year, month - 1, 1));
     const end = new Date(Date.UTC(year, month, 0));
     return this.prisma.fiscalPeriod.upsert({
-      where: { periodYear_periodMonth: { periodYear: year, periodMonth: month } },
+      where: {
+        periodYear_periodMonth: { periodYear: year, periodMonth: month },
+      },
       create: {
         academicOrFiscalYear: fiscalYearLabel,
         periodMonth: month,

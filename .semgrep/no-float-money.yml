@@ -1,0 +1,16 @@
+rules:
+  - id: no-float-money
+    patterns:
+      - pattern-either:
+          - pattern: parseFloat($X)
+          - pattern: Number.parseFloat($X)
+    message: >
+      Avoid floating-point money math — keep amounts as integer minor units (Money class).
+    languages: [typescript]
+    severity: ERROR
+    paths:
+      include:
+        - src/modules/**/services/**
+        - src/shared/money/**
+      exclude:
+        - src/**/*.spec.ts

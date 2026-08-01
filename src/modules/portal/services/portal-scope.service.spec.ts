@@ -1,4 +1,7 @@
-import { DomainException, ErrorCode } from '../../../shared/errors/domain-exception';
+import {
+  DomainException,
+  ErrorCode,
+} from '../../../shared/errors/domain-exception';
 import { PortalScopeService } from './portal-scope.service';
 
 describe('PortalScopeService', () => {

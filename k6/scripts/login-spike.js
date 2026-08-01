@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { getAuthToken } from '../lib/auth.js';
 
 export const options = {
   stages: [
@@ -12,6 +13,7 @@ export const options = {
 };
 
 export default function () {
+  getAuthToken('super_admin');
   const res = http.post(
     `${__ENV.BASE_URL || 'http://localhost:3000'}/api/v1/auth/login`,
     JSON.stringify({

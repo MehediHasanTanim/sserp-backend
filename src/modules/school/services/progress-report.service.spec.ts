@@ -3,7 +3,11 @@ import { ProgressReportService } from './progress-report.service';
 describe('ProgressReportService', () => {
   let prisma: {
     student: { findFirst: jest.Mock };
-    progressReport: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock };
+    progressReport: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+    };
     reportTemplate: { findFirst: jest.Mock };
     iepPlan: { findFirst: jest.Mock };
     progressReportGoalLink: { create: jest.Mock };
@@ -39,7 +43,10 @@ describe('ProgressReportService', () => {
 
   describe('create — template resolution (P-06) and P-04/P-07', () => {
     it('prefers the disability-category-specific template over the catch-all', async () => {
-      const specificTemplate = { id: 'tpl-autism', reportType: 'quarterly_iep' };
+      const specificTemplate = {
+        id: 'tpl-autism',
+        reportType: 'quarterly_iep',
+      };
       prisma.progressReport.findUnique.mockResolvedValue(null);
       prisma.reportTemplate.findFirst.mockResolvedValueOnce(specificTemplate);
       prisma.progressReport.create.mockResolvedValue({ id: 'rep1' });
@@ -116,7 +123,10 @@ describe('ProgressReportService', () => {
     it('requires at least one IEP goal link for a monthly report when the student has an active IEP', async () => {
       prisma.progressReport.findUnique.mockResolvedValue(null);
       prisma.reportTemplate.findFirst.mockResolvedValue({ id: 'tpl1' });
-      prisma.iepPlan.findFirst.mockResolvedValue({ id: 'iep1', status: 'active' });
+      prisma.iepPlan.findFirst.mockResolvedValue({
+        id: 'iep1',
+        status: 'active',
+      });
 
       await expect(
         service.create('stu1', {
@@ -225,7 +235,10 @@ describe('ProgressReportService', () => {
 
       await expect(
         service.approve('rep1', 'coordinator1'),
-      ).rejects.toMatchObject({ statusCode: 409, code: 'INVALID_REPORT_TRANSITION' });
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'INVALID_REPORT_TRANSITION',
+      });
     });
 
     it('reject: requires a comment', async () => {

@@ -113,12 +113,19 @@ export class BehavioralService {
     const incidents = await this.prisma.behavioralIncident.findMany({
       where: { studentId },
       orderBy: { incidentDatetime: 'asc' },
-      select: { behaviorType: true, incidentDatetime: true, durationMinutes: true },
+      select: {
+        behaviorType: true,
+        incidentDatetime: true,
+        durationMinutes: true,
+      },
     });
 
     const byType = new Map<string, number>();
     for (const incident of incidents) {
-      byType.set(incident.behaviorType, (byType.get(incident.behaviorType) ?? 0) + 1);
+      byType.set(
+        incident.behaviorType,
+        (byType.get(incident.behaviorType) ?? 0) + 1,
+      );
     }
 
     return {
