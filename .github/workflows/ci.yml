@@ -91,6 +91,7 @@ jobs:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_USE_SSL: 'false'
+      R2_BUCKET_NAME: sserp
       COOKIE_SECURE: 'false'
       BOOTSTRAP_ADMIN_PASSWORD: ChangeMeNow1
       BOOTSTRAP_ADMIN_EMAIL: admin@sserp.local

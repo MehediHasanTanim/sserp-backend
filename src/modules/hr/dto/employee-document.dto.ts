@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateEmployeeDocumentDto {
@@ -37,7 +38,13 @@ export class CreateEmployeeContractDto {
 export class UpdateEmployeeContractDto {
   @IsOptional() @IsString() contractType?: string;
   @IsOptional() @IsDateString() startDate?: string;
-  @IsOptional() @IsDateString() endDate?: string;
-  @IsOptional() @IsUUID() attachmentId?: string;
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsDateString()
+  endDate?: string | null;
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  attachmentId?: string | null;
   @IsOptional() @IsBoolean() isCurrent?: boolean;
 }

@@ -66,7 +66,7 @@ export class PayrollRunService {
       where: { id },
       include: {
         payrollGroup: true,
-        slips: { include: { lines: true, employee: true } },
+        slips: { include: { lines: true, employee: { include: { department: true } } } },
       },
     });
     if (!run) throw DomainException.notFound('Payroll run not found');
@@ -551,7 +551,7 @@ export class PayrollRunService {
         slips: {
           include: {
             lines: true,
-            employee: true,
+            employee: { include: { department: true } },
           },
         },
       },
@@ -584,7 +584,7 @@ export class PayrollRunService {
     let totalLop = 0;
 
     for (const slip of run.slips) {
-      const cc = costCenterForDepartment(slip.employee.department);
+      const cc = costCenterForDepartment(slip.employee.department.code);
       totalNet += slip.netAmount;
       for (const line of slip.lines) {
         if (line.componentType === 'earning') {
@@ -627,7 +627,7 @@ export class PayrollRunService {
               })
             : null;
           const code = comp?.coaAccountCode ?? '5010';
-          const cc2 = costCenterForDepartment(slip.employee.department);
+          const cc2 = costCenterForDepartment(slip.employee.department.code);
           const key = `${code}|${cc2}`;
           expenseBuckets.set(key, (expenseBuckets.get(key) ?? 0) + line.amount);
         }

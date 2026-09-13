@@ -1,14 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import {
-  EmployeeStatus,
-  EmploymentType,
-  HrDepartment,
-  Prisma,
-} from '@prisma/client';
+import { EmployeeStatus, EmploymentType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { DomainException } from '../../../shared/errors/domain-exception';
 import { TxClient } from '../../../shared/prisma/transaction.helper';
 import { NumberingService } from '../../admin/services/organization.service';
+import { OrgStructureService } from './org-structure.service';
 
 export interface CreateEmployeeInput {
   fullName: string;
@@ -19,8 +15,8 @@ export interface CreateEmployeeInput {
   phone?: string;
   address?: Record<string, unknown>;
   photoAttachmentId?: string;
-  department: HrDepartment;
-  designation: string;
+  departmentId: string;
+  designationId: string;
   employmentType: EmploymentType;
   reportingManagerId?: string;
   joiningDate: string;
@@ -37,8 +33,8 @@ export interface UpdateEmployeeInput {
   phone?: string;
   address?: Record<string, unknown>;
   photoAttachmentId?: string;
-  department?: HrDepartment;
-  designation?: string;
+  departmentId?: string;
+  designationId?: string;
   employmentType?: EmploymentType;
   reportingManagerId?: string;
   probationEndDate?: string;
@@ -49,16 +45,24 @@ export interface UpdateEmployeeInput {
 export interface EmployeeListQuery {
   page?: number;
   pageSize?: number;
-  department?: HrDepartment;
+  /** Filter by legacy department code (school|therapy|…). */
+  department?: string;
+  departmentId?: string;
   employmentType?: EmploymentType;
   status?: EmployeeStatus;
   reportingManagerId?: string;
   search?: string;
 }
 
+const EMPLOYEE_INCLUDE = {
+  department: { select: { id: true, code: true, name: true } },
+  designation: { select: { id: true, name: true, code: true } },
+  exit: { select: { exitType: true } },
+} as const;
+
 const TRACKED_FIELDS = [
-  'department',
-  'designation',
+  'departmentId',
+  'designationId',
   'basicSalary',
   'status',
   'reportingManagerId',
@@ -66,10 +70,10 @@ const TRACKED_FIELDS = [
 
 function changeTypeFor(field: (typeof TRACKED_FIELDS)[number]) {
   switch (field) {
-    case 'department':
+    case 'departmentId':
     case 'reportingManagerId':
       return 'transfer' as const;
-    case 'designation':
+    case 'designationId':
       return 'designation_change' as const;
     case 'basicSalary':
       return 'salary_change' as const;
@@ -83,13 +87,18 @@ export class EmployeeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly numbering: NumberingService,
+    private readonly org: OrgStructureService,
   ) {}
 
   async list(query: EmployeeListQuery) {
     const page = query.page ?? 1;
     const pageSize = Math.min(query.pageSize ?? 20, 100);
     const where: Prisma.EmployeeWhereInput = { deletedAt: null };
-    if (query.department) where.department = query.department;
+    if (query.departmentId) {
+      where.departmentId = query.departmentId;
+    } else if (query.department) {
+      where.department = { code: query.department };
+    }
     if (query.employmentType) where.employmentType = query.employmentType;
     if (query.status) where.status = query.status;
     if (query.reportingManagerId)
@@ -107,6 +116,7 @@ export class EmployeeService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
+        include: EMPLOYEE_INCLUDE,
       }),
     ]);
     return { items, page, pageSize, total };
@@ -116,6 +126,7 @@ export class EmployeeService {
     const employee = await this.prisma.employee.findFirst({
       where: { id, deletedAt: null },
       include: {
+        ...EMPLOYEE_INCLUDE,
         reportingManager: {
           select: { id: true, employeeCode: true, fullName: true },
         },
@@ -143,7 +154,13 @@ export class EmployeeService {
     return employee;
   }
 
+  private async assertOrgIds(departmentId: string, designationId: string) {
+    await this.org.requireDepartment(departmentId);
+    await this.org.requireDesignation(designationId, departmentId);
+  }
+
   async create(input: CreateEmployeeInput, actorId: string) {
+    await this.assertOrgIds(input.departmentId, input.designationId);
     return this.prisma.$transaction(async (tx) => {
       const employeeCode = await this.numbering.nextCode('employee', tx);
       return tx.employee.create({
@@ -159,8 +176,8 @@ export class EmployeeService {
           phone: input.phone,
           address: input.address as Prisma.InputJsonValue | undefined,
           photoAttachmentId: input.photoAttachmentId,
-          department: input.department,
-          designation: input.designation,
+          departmentId: input.departmentId,
+          designationId: input.designationId,
           employmentType: input.employmentType,
           reportingManagerId: input.reportingManagerId,
           joiningDate: new Date(input.joiningDate),
@@ -170,6 +187,7 @@ export class EmployeeService {
           basicSalary: input.basicSalary,
           createdBy: actorId,
         },
+        include: EMPLOYEE_INCLUDE,
       });
     });
   }
@@ -177,6 +195,12 @@ export class EmployeeService {
   async update(id: string, input: UpdateEmployeeInput, actorId: string) {
     return this.prisma.$transaction(async (tx) => {
       const existing = await this.requireActive(id, tx);
+      const nextDepartmentId = input.departmentId ?? existing.departmentId;
+      const nextDesignationId = input.designationId ?? existing.designationId;
+      if (input.departmentId || input.designationId) {
+        await this.org.requireDepartment(nextDepartmentId);
+        await this.org.requireDesignation(nextDesignationId, nextDepartmentId);
+      }
 
       const data: Prisma.EmployeeUpdateInput = {
         fullName: input.fullName,
@@ -189,7 +213,6 @@ export class EmployeeService {
         phone: input.phone,
         address: input.address as Prisma.InputJsonValue | undefined,
         photoAttachmentId: input.photoAttachmentId,
-        designation: input.designation,
         employmentType: input.employmentType,
         probationEndDate: input.probationEndDate
           ? new Date(input.probationEndDate)
@@ -198,14 +221,23 @@ export class EmployeeService {
         status: input.status,
         updatedBy: actorId,
       };
-      if (input.department) data.department = input.department;
+      if (input.departmentId) {
+        data.department = { connect: { id: input.departmentId } };
+      }
+      if (input.designationId) {
+        data.designation = { connect: { id: input.designationId } };
+      }
       if (input.reportingManagerId !== undefined) {
         data.reportingManager = input.reportingManagerId
           ? { connect: { id: input.reportingManagerId } }
           : { disconnect: true };
       }
 
-      const updated = await tx.employee.update({ where: { id }, data });
+      const updated = await tx.employee.update({
+        where: { id },
+        data,
+        include: EMPLOYEE_INCLUDE,
+      });
 
       const historyRows: Prisma.EmployeeHistoryCreateManyInput[] = [];
       for (const field of TRACKED_FIELDS) {

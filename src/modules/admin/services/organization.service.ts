@@ -59,9 +59,32 @@ export class NumberingService {
       resetPeriod?: NumberingResetPeriod;
     },
   ) {
+    const existing = await this.prisma.numberingScheme.findUnique({
+      where: { entityType },
+    });
+    if (!existing) {
+      throw DomainException.notFound(
+        `Numbering scheme "${entityType}" not found`,
+      );
+    }
+    if (
+      data.prefix === undefined &&
+      data.padding === undefined &&
+      data.resetPeriod === undefined
+    ) {
+      throw DomainException.validation(
+        'Provide at least one of prefix, padding, or resetPeriod',
+      );
+    }
     return this.prisma.numberingScheme.update({
       where: { entityType },
-      data,
+      data: {
+        ...(data.prefix !== undefined ? { prefix: data.prefix } : {}),
+        ...(data.padding !== undefined ? { padding: data.padding } : {}),
+        ...(data.resetPeriod !== undefined
+          ? { resetPeriod: data.resetPeriod }
+          : {}),
+      },
     });
   }
 

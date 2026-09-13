@@ -86,6 +86,7 @@ export class GratuityProvisionService {
         employmentType: { in: policy.applicableEmploymentTypes as never[] },
       },
       include: {
+        department: { select: { code: true } },
         salaryStructures: {
           where: { status: 'active' },
           include: {
@@ -178,7 +179,7 @@ export class GratuityProvisionService {
       const delta = entitlementAmount - priorTotal;
       const cumulativeTotal = priorTotal + delta;
 
-      const costCenter = costCenterForDepartment(employee.department);
+      const costCenter = costCenterForDepartment(employee.department.code);
       const provision = await this.prisma.$transaction(async (tx) => {
         const row = await tx.gratuityProvision.create({
           data: {

@@ -8,16 +8,156 @@ import {
 import { EventNames } from '../../../shared/events/event-names';
 import { NumberingService } from '../../admin/services/organization.service';
 import { LedgerPort } from '../../../shared/ports/ledger.port';
+import { NotificationPort } from '../../../shared/ports/notification.port';
+import { CreateActivityDto } from '../dto/activity.dto';
+import {
+  notifyGuardiansForStudent,
+  notifyStaffByRoles,
+} from './guardian-notify.util';
+
+function parseTime(value: string): Date {
+  const [hours, minutes, seconds] = value.split(':').map(Number);
+  return new Date(
+    Date.UTC(1970, 0, 1, hours || 0, minutes || 0, seconds || 0),
+  );
+}
+
+function enrollmentCounts(
+  enrollments: Array<{ enrollmentState: string; consentStatus: string }>,
+) {
+  let confirmedCount = 0;
+  let waitlistedCount = 0;
+  for (const row of enrollments) {
+    if (row.enrollmentState === 'confirmed') {
+      confirmedCount += 1;
+    } else if (
+      row.enrollmentState === 'waitlisted' &&
+      row.consentStatus === 'confirmed'
+    ) {
+      waitlistedCount += 1;
+    }
+  }
+  return { confirmedCount, waitlistedCount };
+}
 
 @Injectable()
 export class ActivityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
+    private readonly notifications: NotificationPort,
   ) {}
 
   listTypes() {
     return this.prisma.activityType.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  /** Calendar feed: activities between optional from/to (inclusive dates). */
+  async calendar(filters?: { from?: Date; to?: Date }) {
+    const from =
+      filters?.from ??
+      new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+    const to =
+      filters?.to ??
+      new Date(
+        Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 2, 0),
+      );
+    const activities = await this.list({ from, to });
+    return activities.map((a) => ({
+      id: a.id,
+      title: a.name,
+      date: a.activityDate,
+      startTime: a.startTime,
+      endTime: a.endTime,
+      venue: a.venue,
+      status: a.status,
+      capacity: a.capacity,
+      confirmedCount: a.confirmedCount,
+      waitlistedCount: a.waitlistedCount,
+      activityType: a.activityType,
+    }));
+  }
+
+  /**
+   * O-02: close registration after opt-in deadline — decline pending invites
+   * and notify coordinators. Idempotent once no pending remain.
+   */
+  async closeExpiredOptIns(now: Date = new Date()) {
+    const due = await this.prisma.outdoorActivity.findMany({
+      where: {
+        status: 'upcoming',
+        optInDeadline: { lte: now },
+      },
+      include: {
+        enrollments: {
+          where: { consentStatus: 'pending' },
+        },
+      },
+    });
+
+    let closed = 0;
+    let pendingDeclined = 0;
+    for (const activity of due) {
+      if (!activity.enrollments.length) continue;
+      for (const enrollment of activity.enrollments) {
+        await this.prisma.activityEnrollment.update({
+          where: { id: enrollment.id },
+          data: {
+            consentStatus: 'declined',
+            enrollmentState: 'withdrawn',
+            declinedReason: 'Opt-in deadline passed',
+            withdrawnAt: now,
+          },
+        });
+        pendingDeclined += 1;
+      }
+      await notifyStaffByRoles(this.prisma, this.notifications, ['coordinator'], {
+        type: 'activity_optin_closed',
+        title: 'Activity registration closed',
+        body: `Registration for "${activity.name}" closed. Confirmed: ${activity.participantCount}. Pending invites declined: ${activity.enrollments.length}.`,
+        entityType: 'outdoor_activity',
+        entityId: activity.id,
+      });
+      closed += 1;
+    }
+    return { closed, pendingDeclined };
+  }
+
+  /** Unpaid activity fee alerts for upcoming activities. */
+  async sendUnpaidFeeReminders(now: Date = new Date()) {
+    const enrollments = await this.prisma.activityEnrollment.findMany({
+      where: {
+        enrollmentState: 'confirmed',
+        feeStatus: 'pending',
+        invoiceId: { not: null },
+        activity: {
+          status: 'upcoming',
+          activityDate: { gte: now },
+        },
+      },
+      include: { activity: true },
+    });
+
+    let remindersSent = 0;
+    for (const enrollment of enrollments) {
+      await notifyGuardiansForStudent(
+        this.prisma,
+        this.notifications,
+        enrollment.studentId,
+        {
+          type: 'activity_fee_unpaid',
+          title: 'Activity fee unpaid',
+          body: `Fee for "${enrollment.activity.name}" on ${enrollment.activity.activityDate.toISOString().slice(0, 10)} is still unpaid.`,
+        },
+      );
+      await this.events.emitAsync(EventNames.ACTIVITY_FEE_UNPAID, {
+        activityId: enrollment.activityId,
+        studentId: enrollment.studentId,
+        invoiceId: enrollment.invoiceId,
+      });
+      remindersSent += 1;
+    }
+    return { remindersSent };
   }
 
   async createType(data: {
@@ -45,8 +185,8 @@ export class ActivityService {
     return this.prisma.activityType.update({ where: { id }, data });
   }
 
-  list(filters?: { from?: Date; to?: Date }) {
-    return this.prisma.outdoorActivity.findMany({
+  async list(filters?: { from?: Date; to?: Date }) {
+    const activities = await this.prisma.outdoorActivity.findMany({
       where: {
         ...(filters?.from || filters?.to
           ? {
@@ -59,10 +199,16 @@ export class ActivityService {
       },
       include: {
         activityType: true,
-        _count: { select: { enrollments: true } },
+        enrollments: {
+          select: { enrollmentState: true, consentStatus: true },
+        },
       },
       orderBy: { activityDate: 'asc' },
     });
+    return activities.map(({ enrollments, ...activity }) => ({
+      ...activity,
+      ...enrollmentCounts(enrollments),
+    }));
   }
 
   async get(id: string) {
@@ -76,41 +222,60 @@ export class ActivityService {
       },
     });
     if (!a) throw DomainException.notFound('Activity not found');
-    return a;
+    return { ...a, ...enrollmentCounts(a.enrollments) };
   }
 
-  async create(data: {
-    activityTypeId: string;
-    name: string;
-    description?: string;
-    activityDate: string;
-    capacity: number;
-    feeAmount?: number;
-    optInDeadline: string;
-    venue?: string;
-    waitlistEnabled?: boolean;
-  }) {
+  async create(data: CreateActivityDto) {
     const type = await this.prisma.activityType.findUnique({
       where: { id: data.activityTypeId },
     });
     if (!type) throw DomainException.notFound('Activity type not found');
-    const created = await this.prisma.outdoorActivity.create({
-      data: {
-        activityTypeId: data.activityTypeId,
-        name: data.name,
-        description: data.description,
-        activityDate: new Date(data.activityDate),
-        capacity: data.capacity,
-        feeAmount: data.feeAmount ?? type.defaultFeeAmount,
-        optInDeadline: new Date(data.optInDeadline),
-        venue: data.venue,
-        waitlistEnabled: data.waitlistEnabled ?? true,
-      },
+
+    const supervisorTeacherIds = data.supervisorTeacherIds ?? [];
+    if (supervisorTeacherIds.length > 0) {
+      const teachers = await this.prisma.teacher.findMany({
+        where: { id: { in: supervisorTeacherIds } },
+        select: { id: true },
+      });
+      if (teachers.length !== supervisorTeacherIds.length) {
+        throw DomainException.validation('One or more supervisors not found');
+      }
+    }
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const activity = await tx.outdoorActivity.create({
+        data: {
+          activityTypeId: data.activityTypeId,
+          name: data.name,
+          description: data.description,
+          activityDate: new Date(data.activityDate),
+          startTime: data.startTime ? parseTime(data.startTime) : undefined,
+          endTime: data.endTime ? parseTime(data.endTime) : undefined,
+          durationMinutes: data.durationMinutes,
+          capacity: data.capacity,
+          feeAmount: data.feeAmount ?? type.defaultFeeAmount,
+          optInDeadline: new Date(data.optInDeadline),
+          venue: data.venue,
+          waitlistEnabled: data.waitlistEnabled ?? true,
+        },
+      });
+
+      if (supervisorTeacherIds.length > 0) {
+        await tx.activitySupervisor.createMany({
+          data: supervisorTeacherIds.map((teacherId) => ({
+            activityId: activity.id,
+            teacherId,
+          })),
+        });
+      }
+
+      return activity;
     });
+
     await this.events.emitAsync(EventNames.ACTIVITY_CREATED, {
       activityId: created.id,
     });
-    return created;
+    return this.get(created.id);
   }
 
   async update(
@@ -151,10 +316,33 @@ export class ActivityService {
   }
 
   async setSummary(id: string, postSummary: string) {
-    return this.prisma.outdoorActivity.update({
+    const updated = await this.prisma.outdoorActivity.update({
       where: { id },
       data: { postSummary, status: 'completed' },
+      select: { id: true, postSummary: true, updatedAt: true },
     });
+
+    const notes = updated.postSummary ?? '';
+    return {
+      activityId: updated.id,
+      notes,
+      updatedAt: notes ? updated.updatedAt.toISOString() : null,
+    };
+  }
+
+  async getSummary(id: string) {
+    const activity = await this.prisma.outdoorActivity.findUnique({
+      where: { id },
+      select: { id: true, postSummary: true, updatedAt: true },
+    });
+    if (!activity) throw DomainException.notFound('Activity not found');
+
+    const notes = activity.postSummary ?? '';
+    return {
+      activityId: activity.id,
+      notes,
+      updatedAt: notes ? activity.updatedAt.toISOString() : null,
+    };
   }
 }
 
@@ -175,6 +363,78 @@ export class ActivityEnrollmentService {
       },
       orderBy: [{ enrollmentState: 'asc' }, { waitlistPosition: 'asc' }],
     });
+  }
+
+  async invite(activityId: string, studentIds: string[], actorUserId: string) {
+    const uniqueStudentIds = [...new Set(studentIds)];
+    const activity = await this.prisma.outdoorActivity.findUnique({
+      where: { id: activityId },
+    });
+    if (!activity) throw DomainException.notFound('Activity not found');
+    if (activity.status === 'cancelled') {
+      throw DomainException.conflict('Activity has been cancelled');
+    }
+
+    const students = await this.prisma.student.findMany({
+      where: {
+        id: { in: uniqueStudentIds },
+        deletedAt: null,
+        status: 'active',
+      },
+      select: { id: true },
+    });
+    if (students.length !== uniqueStudentIds.length) {
+      throw DomainException.validation(
+        'One or more students are invalid or inactive',
+      );
+    }
+
+    const results = [];
+    for (const studentId of uniqueStudentIds) {
+      const existing = await this.prisma.activityEnrollment.findUnique({
+        where: { activityId_studentId: { activityId, studentId } },
+      });
+      if (
+        existing?.consentStatus === 'confirmed' &&
+        existing.enrollmentState === 'confirmed'
+      ) {
+        continue;
+      }
+
+      const enrollment = await this.prisma.activityEnrollment.upsert({
+        where: { activityId_studentId: { activityId, studentId } },
+        create: {
+          activityId,
+          studentId,
+          consentStatus: 'pending',
+          enrollmentState: 'waitlisted',
+          waitlistPosition: null,
+        },
+        update: {
+          consentStatus: 'pending',
+          enrollmentState: 'waitlisted',
+          waitlistPosition: null,
+          withdrawnAt: null,
+          declinedReason: null,
+          consentChannel: null,
+          consentRecordedAt: null,
+          consentRecordedBy: null,
+        },
+        include: {
+          student: { select: { id: true, fullName: true, studentCode: true } },
+        },
+      });
+
+      await this.events.emitAsync(EventNames.ACTIVITY_OPTIN_INVITED, {
+        activityId,
+        studentId,
+        activityName: activity.name,
+        actorUserId,
+      });
+      results.push(enrollment);
+    }
+
+    return results;
   }
 
   /**
@@ -216,30 +476,69 @@ export class ActivityEnrollmentService {
     }
 
     if (!params.accept) {
-      const row = await this.prisma.activityEnrollment.upsert({
-        where: {
-          activityId_studentId: {
+      const row = await this.prisma.$transaction(async (tx) => {
+        // Check if there was a prior confirmed enrollment with an invoice
+        const existing = await tx.activityEnrollment.findUnique({
+          where: {
+            activityId_studentId: {
+              activityId: params.activityId,
+              studentId: params.studentId,
+            },
+          },
+        });
+
+        // If declining after being confirmed, decrement participantCount
+        if (existing?.enrollmentState === 'confirmed') {
+          await tx.outdoorActivity.update({
+            where: { id: params.activityId },
+            data: { participantCount: { decrement: 1 } },
+          });
+        }
+
+        const updated = await tx.activityEnrollment.upsert({
+          where: {
+            activityId_studentId: {
+              activityId: params.activityId,
+              studentId: params.studentId,
+            },
+          },
+          create: {
             activityId: params.activityId,
             studentId: params.studentId,
+            consentStatus: 'declined',
+            enrollmentState: 'declined',
+            consentChannel: params.channel,
+            consentRecordedAt: new Date(),
+            consentRecordedBy: params.actorUserId,
+            declinedReason: params.declinedReason,
           },
-        },
-        create: {
-          activityId: params.activityId,
-          studentId: params.studentId,
-          consentStatus: 'declined',
-          enrollmentState: 'declined',
-          consentChannel: params.channel,
-          consentRecordedAt: new Date(),
-          consentRecordedBy: params.actorUserId,
-          declinedReason: params.declinedReason,
-        },
-        update: {
-          consentStatus: 'declined',
-          enrollmentState: 'declined',
-          declinedReason: params.declinedReason,
-          consentRecordedAt: new Date(),
-        },
+          update: {
+            consentStatus: 'declined',
+            enrollmentState: 'declined',
+            declinedReason: params.declinedReason,
+            consentRecordedAt: new Date(),
+          },
+        });
+
+        // Cancel the existing invoice if it's unpaid
+        if (existing?.invoiceId) {
+          const inv = await tx.feeInvoice.findUnique({
+            where: { id: existing.invoiceId },
+          });
+          if (inv && inv.paidAmount === 0 && inv.status !== 'cancelled') {
+            await tx.feeInvoice.update({
+              where: { id: inv.id },
+              data: {
+                status: 'cancelled',
+                cancelledReason: 'Student declined activity participation',
+              },
+            });
+          }
+        }
+
+        return updated;
       });
+
       await this.events.emitAsync(EventNames.ACTIVITY_OPTIN_DECLINED, {
         activityId: params.activityId,
         studentId: params.studentId,
@@ -334,12 +633,20 @@ export class ActivityEnrollmentService {
       if (!existing) throw DomainException.notFound('Enrollment not found');
 
       const wasConfirmed = existing.enrollmentState === 'confirmed';
-      await tx.activityEnrollment.update({
+      const enrollment = await tx.activityEnrollment.update({
         where: { id: existing.id },
         data: {
-          enrollmentState: 'withdrawn',
-          withdrawnAt: new Date(),
+          consentStatus: 'pending',
+          enrollmentState: 'waitlisted',
           waitlistPosition: null,
+          withdrawnAt: new Date(),
+          consentChannel: null,
+          consentRecordedAt: null,
+          consentRecordedBy: null,
+          declinedReason: null,
+        },
+        include: {
+          student: { select: { id: true, fullName: true, studentCode: true } },
         },
       });
 
@@ -348,8 +655,29 @@ export class ActivityEnrollmentService {
           where: { id: activityId },
           data: { participantCount: { decrement: 1 } },
         });
+
+        // Cancel the invoice of the withdrawing student if unpaid
+        if (existing.invoiceId) {
+          const inv = await tx.feeInvoice.findUnique({
+            where: { id: existing.invoiceId },
+          });
+          if (inv && inv.paidAmount === 0 && inv.status !== 'cancelled') {
+            await tx.feeInvoice.update({
+              where: { id: inv.id },
+              data: {
+                status: 'cancelled',
+                cancelledReason: 'Student withdrew from activity',
+              },
+            });
+          }
+        }
+
         const next = await tx.activityEnrollment.findFirst({
-          where: { activityId, enrollmentState: 'waitlisted' },
+          where: {
+            activityId,
+            enrollmentState: 'waitlisted',
+            consentStatus: 'confirmed',
+          },
           orderBy: { waitlistPosition: 'asc' },
         });
         if (next) {
@@ -376,7 +704,7 @@ export class ActivityEnrollmentService {
           });
         }
       }
-      return { withdrawn: true };
+      return enrollment;
     });
   }
 
@@ -512,5 +840,96 @@ export class ActivityAttendanceService {
       results.push(row);
     }
     return results;
+  }
+}
+
+@Injectable()
+export class ActivityMediaService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  private async ensureActivity(activityId: string) {
+    const activity = await this.prisma.outdoorActivity.findUnique({
+      where: { id: activityId },
+      select: { id: true },
+    });
+    if (!activity) throw DomainException.notFound('Activity not found');
+  }
+
+  async list(activityId: string) {
+    await this.ensureActivity(activityId);
+    const rows = await this.prisma.activityMedia.findMany({
+      where: { activityId },
+      orderBy: { id: 'asc' },
+    });
+    if (rows.length === 0) return [];
+
+    const attachments = await this.prisma.attachment.findMany({
+      where: {
+        id: { in: rows.map((row) => row.attachmentId) },
+        deletedAt: null,
+      },
+      select: { id: true, originalFilename: true },
+    });
+    const byId = new Map(attachments.map((a) => [a.id, a]));
+
+    return rows.map((row) => ({
+      id: row.id,
+      activityId: row.activityId,
+      attachmentId: row.attachmentId,
+      caption: row.caption ?? '',
+      fileName: byId.get(row.attachmentId)?.originalFilename ?? 'photo',
+    }));
+  }
+
+  async add(
+    activityId: string,
+    input: { attachmentId: string; caption?: string },
+  ) {
+    await this.ensureActivity(activityId);
+
+    const attachment = await this.prisma.attachment.findFirst({
+      where: {
+        id: input.attachmentId,
+        deletedAt: null,
+        status: 'confirmed',
+      },
+    });
+    if (!attachment) {
+      throw DomainException.notFound('Attachment not found or not confirmed');
+    }
+
+    const media = await this.prisma.activityMedia.create({
+      data: {
+        activityId,
+        attachmentId: input.attachmentId,
+        caption: input.caption?.trim() || attachment.originalFilename,
+      },
+    });
+
+    await this.prisma.attachment.update({
+      where: { id: attachment.id },
+      data: {
+        entityType: 'activity_media',
+        entityId: media.id,
+      },
+    });
+
+    return {
+      id: media.id,
+      activityId: media.activityId,
+      attachmentId: media.attachmentId,
+      caption: media.caption ?? '',
+      fileName: attachment.originalFilename,
+    };
+  }
+
+  async remove(activityId: string, mediaId: string) {
+    const row = await this.prisma.activityMedia.findFirst({
+      where: { id: mediaId, activityId },
+    });
+    if (!row) throw DomainException.notFound('Media not found');
+
+    await this.prisma.activityMedia.delete({ where: { id: mediaId } });
+    return { ok: true };
   }
 }

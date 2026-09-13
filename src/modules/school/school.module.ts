@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { AdminModule } from '../admin/admin.module';
 import { HrModule } from '../hr/hr.module';
+import { FilesModule } from '../files/files.module';
 
 import { AcademicYearController } from './controllers/academic-year.controller';
 import { ShiftController } from './controllers/shift.controller';
@@ -49,6 +50,7 @@ import {
   ActivityService,
   ActivityEnrollmentService,
   ActivityAttendanceService,
+  ActivityMediaService,
 } from './services/activity.service';
 import {
   StudentLeaveService,
@@ -66,11 +68,14 @@ import { StudentPolicy } from './policies/student.policy';
 import { SchoolStudentReadService } from './services/school-student-read.service';
 
 import { SchoolOpsJobs } from './jobs/school-ops.job';
+import { Phase2OpsJobs } from './jobs/phase2-ops.job';
+import { SchoolDocumentService } from './services/school-document.service';
 
 @Module({
   imports: [
     AdminModule,
     HrModule,
+    FilesModule,
     BullModule.registerQueue(
       { name: 'school-ops' },
       { name: 'pdf' },
@@ -124,7 +129,9 @@ import { SchoolOpsJobs } from './jobs/school-ops.job';
     ActivityService,
     ActivityEnrollmentService,
     ActivityAttendanceService,
+    ActivityMediaService,
     StudentLeaveService,
+    SchoolDocumentService,
     AdmissionFeePaidListener,
     HrAbsenceListener,
     ActivityFeeListener,
@@ -132,6 +139,7 @@ import { SchoolOpsJobs } from './jobs/school-ops.job';
     AttendanceExcusedLeaveListener,
     StudentPolicy,
     SchoolOpsJobs,
+    Phase2OpsJobs,
     SchoolStudentReadService,
   ],
   exports: [
@@ -144,6 +152,8 @@ import { SchoolOpsJobs } from './jobs/school-ops.job';
     SchoolAttendanceService,
     ActivityEnrollmentService,
     SchoolStudentReadService,
+    SchoolDocumentService,
+    ProgressReportService,
   ],
 })
 export class SchoolModule {}

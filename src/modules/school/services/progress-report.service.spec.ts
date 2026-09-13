@@ -7,6 +7,7 @@ describe('ProgressReportService', () => {
       findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
     };
     reportTemplate: { findFirst: jest.Mock };
     iepPlan: { findFirst: jest.Mock };
@@ -26,6 +27,7 @@ describe('ProgressReportService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
       },
       reportTemplate: { findFirst: jest.fn() },
       iepPlan: { findFirst: jest.fn().mockResolvedValue(null) },
@@ -120,22 +122,24 @@ describe('ProgressReportService', () => {
       ).rejects.toMatchObject({ statusCode: 409, code: 'REPORT_EXISTS' });
     });
 
-    it('requires at least one IEP goal link for a monthly report when the student has an active IEP', async () => {
-      prisma.progressReport.findUnique.mockResolvedValue(null);
+    it('allows creating a monthly draft without goal links even when the student has an active IEP', async () => {
+      prisma.progressReport.findUnique
+        .mockResolvedValueOnce(null) // duplicate check
+        .mockResolvedValueOnce({ id: 'rep1' }); // post-create refetch
       prisma.reportTemplate.findFirst.mockResolvedValue({ id: 'tpl1' });
       prisma.iepPlan.findFirst.mockResolvedValue({
         id: 'iep1',
         status: 'active',
       });
+      prisma.progressReport.create.mockResolvedValue({ id: 'rep1' });
 
-      await expect(
-        service.create('stu1', {
-          reportType: 'monthly_progress',
-          periodStart: '2024-01-01',
-          periodEnd: '2024-01-31',
-          academicYearId: 'ay1',
-        }),
-      ).rejects.toMatchObject({ statusCode: 422, code: 'GOAL_LINK_REQUIRED' });
+      const result = await service.create('stu1', {
+        reportType: 'monthly_progress',
+        periodStart: '2024-01-01',
+        periodEnd: '2024-01-31',
+        academicYearId: 'ay1',
+      });
+      expect(result).toEqual({ id: 'rep1' });
     });
 
     it('allows a monthly report without goal links when the student has no active IEP', async () => {
@@ -153,6 +157,28 @@ describe('ProgressReportService', () => {
         academicYearId: 'ay1',
       });
       expect(result).toEqual({ id: 'rep1' });
+    });
+  });
+
+  describe('submit — P-07 goal links', () => {
+    it('requires at least one IEP goal link for a monthly report when the student has an active IEP', async () => {
+      prisma.progressReport.findUnique.mockResolvedValue({
+        id: 'rep1',
+        studentId: 'stu1',
+        reportType: 'monthly_progress',
+        status: 'draft',
+        submittedBy: null,
+        goalLinks: [],
+      });
+      prisma.iepPlan.findFirst.mockResolvedValue({
+        id: 'iep1',
+        status: 'active',
+      });
+
+      await expect(service.submit('rep1', 'teacher1')).rejects.toMatchObject({
+        statusCode: 422,
+        code: 'GOAL_LINK_REQUIRED',
+      });
     });
   });
 
@@ -204,7 +230,9 @@ describe('ProgressReportService', () => {
         status: data.status,
       }));
 
-      const result = await service.approve('rep1', 'coordinator1');
+      const result = await service.approve('rep1', 'coordinator1', [
+        'coordinator',
+      ]);
       expect(result.status).toBe('approved');
       expect(events.emitAsync).toHaveBeenCalledWith(
         'progress_report.approved',
@@ -220,9 +248,27 @@ describe('ProgressReportService', () => {
         submittedBy: 'teacher1',
       });
 
-      await expect(service.approve('rep1', 'teacher1')).rejects.toMatchObject({
+      await expect(
+        service.approve('rep1', 'teacher1', ['teacher']),
+      ).rejects.toMatchObject({
         statusCode: 403,
       });
+    });
+
+    it('approve: elevated reviewers may approve a report they submitted', async () => {
+      prisma.progressReport.findUnique.mockResolvedValue({
+        id: 'rep1',
+        studentId: 'stu1',
+        status: 'submitted',
+        submittedBy: 'admin1',
+      });
+      prisma.progressReport.update.mockImplementation(({ data }) => ({
+        id: 'rep1',
+        status: data.status,
+      }));
+
+      const result = await service.approve('rep1', 'admin1', ['super_admin']);
+      expect(result.status).toBe('approved');
     });
 
     it('approve: rejects approving a non-submitted report', async () => {
@@ -234,7 +280,7 @@ describe('ProgressReportService', () => {
       });
 
       await expect(
-        service.approve('rep1', 'coordinator1'),
+        service.approve('rep1', 'coordinator1', ['coordinator']),
       ).rejects.toMatchObject({
         statusCode: 409,
         code: 'INVALID_REPORT_TRANSITION',
@@ -309,6 +355,35 @@ describe('ProgressReportService', () => {
         statusCode: 409,
         code: 'INVALID_REPORT_TRANSITION',
       });
+    });
+  });
+
+  describe('deleteDraft', () => {
+    it('deletes a draft report', async () => {
+      prisma.progressReport.findUnique.mockResolvedValue({
+        id: 'rep1',
+        status: 'draft',
+      });
+      prisma.progressReport.delete.mockResolvedValue({ id: 'rep1' });
+
+      const result = await service.deleteDraft('rep1');
+      expect(result).toEqual({ id: 'rep1', deleted: true });
+      expect(prisma.progressReport.delete).toHaveBeenCalledWith({
+        where: { id: 'rep1' },
+      });
+    });
+
+    it('rejects deleting a non-draft report', async () => {
+      prisma.progressReport.findUnique.mockResolvedValue({
+        id: 'rep1',
+        status: 'submitted',
+      });
+
+      await expect(service.deleteDraft('rep1')).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'INVALID_REPORT_TRANSITION',
+      });
+      expect(prisma.progressReport.delete).not.toHaveBeenCalled();
     });
   });
 });

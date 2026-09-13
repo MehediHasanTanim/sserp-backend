@@ -6,8 +6,11 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import {
   Roles,
   Permissions,
@@ -77,7 +80,7 @@ export class AdmissionFeeController {
   }
 
   @Post('students/:id/admission-fee/pay')
-  @Roles('coordinator', 'accountant', 'receptionist')
+  @Roles('coordinator', 'accountant', 'receptionist', 'super_admin')
   @Permissions('school:update')
   @Audit({ module: 'school', entity: 'admission_fee', action: 'pay' })
   @ApiOperation({
@@ -111,16 +114,16 @@ export class AdmissionFeeController {
   }
 
   @Get('students/:id/admission-fee/receipt')
-  @Roles('coordinator', 'accountant', 'receptionist', 'parent')
+  @Roles('coordinator', 'accountant', 'receptionist', 'super_admin', 'parent')
   @Permissions('school:read')
-  @ApiOperation({ summary: 'Receipt state for the paid admission fee' })
-  async receipt(@Param('id') id: string) {
-    const fee = await this.admissionFees.getForStudent(id);
-    return {
-      receiptNumber: fee.receiptNumber,
-      amount: fee.paidAmount,
-      paidDate: fee.paidDate,
-      status: fee.status,
-    };
+  @ApiOperation({ summary: 'Download admission fee receipt as PDF' })
+  async receipt(@Param('id') id: string, @Res({ passthrough: true }) res: Response) {
+    const receipt = await this.admissionFees.buildReceiptPdf(id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="admission-fee-receipt-${receipt.receiptNumber}.pdf"`,
+    );
+    return new StreamableFile(receipt.buffer);
   }
 }

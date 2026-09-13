@@ -19,6 +19,7 @@ export async function issueTestToken(params: {
   role: (typeof ROLES)[number];
   permissions?: string[];
   privateKeyPath?: string;
+  scope?: { studentIds: string[]; guardianProfileId: string };
 }): Promise<string> {
   const privateKey = readFileSync(
     params.privateKeyPath ??
@@ -35,7 +36,8 @@ export async function issueTestToken(params: {
       roles: [params.role],
       permissions: params.permissions ?? [],
       mustChangePassword: false,
-      jti: `test-${params.role}`,
+      jti: `test-${params.role}-${params.userId.slice(0, 8)}`,
+      ...(params.scope ? { scope: params.scope } : {}),
     },
     { privateKey, algorithm: 'RS256', expiresIn: '15m' },
   );

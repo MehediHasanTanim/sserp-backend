@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/shared/prisma/prisma.service';
 import { TeacherMappingService } from '../../src/modules/school/services/teacher-mapping.service';
+import { employeeOrgIds } from './helpers/org.helper';
 
 /**
  * M-01/M-07: the shift cap is enforced under `SELECT ... FOR UPDATE`, so
@@ -50,12 +51,13 @@ describe('Shift cap concurrency integration', () => {
       where: { isCurrent: true },
     });
 
+    const { departmentId, designationId } = await employeeOrgIds(prisma);
     const employee = await prisma.employee.create({
       data: {
         employeeCode: `EMP-TEST-${randomUUID()}`,
         fullName: 'Shift Cap Test Teacher',
-        department: 'school',
-        designation: 'Special Education Teacher',
+        departmentId,
+        designationId,
         employmentType: 'permanent',
         joiningDate: new Date('2020-01-01'),
         basicSalary: 30000,

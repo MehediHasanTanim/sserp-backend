@@ -12,9 +12,25 @@ import {
 } from 'class-validator';
 
 export class GenerateMonthlyInvoicesDto {
-  @IsUUID() academicYearId!: string;
-  @IsInt() @Min(1) @Max(12) month!: number;
-  @IsInt() @Min(2000) year!: number;
+  /** Preferred by the UI: `YYYY-MM`. When set, month/year are derived from it. */
+  @IsOptional()
+  @IsString()
+  period?: string;
+
+  @IsOptional()
+  @IsUUID()
+  academicYearId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  month?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(2000)
+  year?: number;
 }
 
 export class CancelInvoiceDto {

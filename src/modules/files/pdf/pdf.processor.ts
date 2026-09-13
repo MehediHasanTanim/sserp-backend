@@ -59,7 +59,7 @@ export class PdfProcessor extends WorkerHost {
     });
 
     const objectKey = `${new Date().toISOString().slice(0, 10)}/payslip-${slip.slipNumber}.pdf`;
-    await this.minio.raw.putObject(
+    const storedKey = await this.minio.putObject(
       'hr-documents',
       objectKey,
       buffer,
@@ -70,7 +70,7 @@ export class PdfProcessor extends WorkerHost {
     const attachment = await this.prisma.attachment.create({
       data: {
         bucket: 'hr-documents',
-        objectKey,
+        objectKey: storedKey,
         originalFilename: `payslip-${slip.slipNumber}.pdf`,
         mimeType,
         sizeBytes: buffer.length,
@@ -103,7 +103,7 @@ export class PdfProcessor extends WorkerHost {
     });
 
     const objectKey = `${new Date().toISOString().slice(0, 10)}/iep-${plan.id}-v${plan.version}.pdf`;
-    await this.minio.raw.putObject(
+    const storedKey = await this.minio.putObject(
       'iep-documents',
       objectKey,
       buffer,
@@ -116,7 +116,7 @@ export class PdfProcessor extends WorkerHost {
     const attachment = await this.prisma.attachment.create({
       data: {
         bucket: 'iep-documents',
-        objectKey,
+        objectKey: storedKey,
         originalFilename: `iep-v${plan.version}.pdf`,
         mimeType,
         sizeBytes: buffer.length,
@@ -150,7 +150,7 @@ export class PdfProcessor extends WorkerHost {
     });
 
     const objectKey = `${new Date().toISOString().slice(0, 10)}/progress-report-${report.id}.pdf`;
-    await this.minio.raw.putObject(
+    const storedKey = await this.minio.putObject(
       'progress-reports',
       objectKey,
       buffer,
@@ -163,7 +163,7 @@ export class PdfProcessor extends WorkerHost {
     const attachment = await this.prisma.attachment.create({
       data: {
         bucket: 'progress-reports',
-        objectKey,
+        objectKey: storedKey,
         originalFilename: `progress-report-${report.id}.pdf`,
         mimeType,
         sizeBytes: buffer.length,

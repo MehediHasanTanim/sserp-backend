@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { HrDepartment, LeaveRequestStatus, Prisma } from '@prisma/client';
+import { LeaveRequestStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import {
   DomainException,
@@ -42,10 +42,29 @@ const DEFAULT_APPROVAL_STEPS = [
 const INCLUDE = {
   leaveType: true,
   employee: {
-    select: { id: true, employeeCode: true, fullName: true, department: true },
+    select: {
+      id: true,
+      employeeCode: true,
+      fullName: true,
+      department: { select: { id: true, code: true, name: true } },
+    },
   },
   approvalSteps: { orderBy: { level: 'asc' as const } },
 };
+
+export function formatLeaveRequest(req: any) {
+  if (!req) return req;
+  const days = req.totalDays != null ? Number(req.totalDays) : undefined;
+  return {
+    ...req,
+    employeeName: req.employee?.fullName ?? req.employeeName,
+    employeeCode: req.employee?.employeeCode ?? req.employeeCode,
+    leaveTypeName: req.leaveType?.name ?? req.leaveTypeName,
+    days,
+    dayCount: days,
+    rejectionReason: req.rejectedReason ?? req.rejectionReason,
+  };
+}
 
 @Injectable()
 export class LeaveRequestService {
@@ -80,6 +99,7 @@ export class LeaveRequestService {
 
     const employee = await this.prisma.employee.findFirst({
       where: { id: input.employeeId, deletedAt: null },
+      include: { department: { select: { code: true } } },
     });
     if (!employee) throw DomainException.notFound('Employee not found');
 
@@ -120,7 +140,7 @@ export class LeaveRequestService {
       totalDays = await this.calendar.countWorkingDays(
         startDate,
         endDate,
-        employee.department,
+        employee.department.code,
       );
       if (totalDays <= 0) {
         throw DomainException.validation(
@@ -144,7 +164,7 @@ export class LeaveRequestService {
 
     const year = startDate.getUTCFullYear();
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const balance = await this.balances.getOrInit(
         input.employeeId,
         input.leaveTypeId,
@@ -186,6 +206,8 @@ export class LeaveRequestService {
         include: INCLUDE,
       });
     });
+
+    return formatLeaveRequest(created);
   }
 
   async list(query: LeaveRequestListQuery, restrictToEmployeeId?: string) {
@@ -216,7 +238,7 @@ export class LeaveRequestService {
         include: INCLUDE,
       }),
     ]);
-    return { items, page, pageSize, total };
+    return { items: items.map(formatLeaveRequest), page, pageSize, total };
   }
 
   async get(id: string) {
@@ -225,7 +247,7 @@ export class LeaveRequestService {
       include: INCLUDE,
     });
     if (!request) throw DomainException.notFound('Leave request not found');
-    return request;
+    return formatLeaveRequest(request);
   }
 
   assertCanView(
@@ -279,13 +301,14 @@ export class LeaveRequestService {
               : today;
           const employee = await tx.employee.findUnique({
             where: { id: request.employeeId },
+            include: { department: { select: { code: true } } },
           });
           const restoreDays = request.isHalfDay
             ? Number(request.totalDays)
             : await this.calendar.countWorkingDays(
                 futureStart,
                 request.endDate,
-                employee?.department,
+                employee?.department.code,
                 tx,
               );
           if (restoreDays > 0) {
@@ -325,11 +348,11 @@ export class LeaveRequestService {
       endDate: result.endDate,
     });
 
-    return result;
+    return formatLeaveRequest(result);
   }
 
   async calendarView(query: {
-    department?: HrDepartment;
+    department?: string;
     dateFrom: string;
     dateTo: string;
   }) {
@@ -338,12 +361,14 @@ export class LeaveRequestService {
       startDate: { lte: new Date(query.dateTo) },
       endDate: { gte: new Date(query.dateFrom) },
     };
-    if (query.department) where.employee = { department: query.department };
+    if (query.department)
+      where.employee = { department: { code: query.department } };
 
-    return this.prisma.hrLeaveRequest.findMany({
+    const items = await this.prisma.hrLeaveRequest.findMany({
       where,
       include: INCLUDE,
       orderBy: { startDate: 'asc' },
     });
+    return items.map(formatLeaveRequest);
   }
 }

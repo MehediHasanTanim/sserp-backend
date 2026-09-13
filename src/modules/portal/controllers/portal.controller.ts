@@ -23,6 +23,7 @@ import { IepService } from '../../school/services/iep.service';
 import { StudentLeaveService } from '../../school/services/student-leave.service';
 import { ActivityEnrollmentService } from '../../school/services/activity.service';
 import { SchoolAttendanceService } from '../../school/services/school-attendance.service';
+import { SchoolDocumentService } from '../../school/services/school-document.service';
 import { DomainException } from '../../../shared/errors/domain-exception';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventNames } from '../../../shared/events/event-names';
@@ -56,12 +57,20 @@ class MessageDto {
   @IsString() studentId!: string;
 }
 
+class MessageReplyDto {
+  @IsString() body!: string;
+}
+
 class FeePayIntentDto {
   @IsString() invoiceId!: string;
   @IsString() returnUrl!: string;
   @IsOptional() @IsInt() @Min(1) amount?: number;
 }
 
+/**
+ * Parent portal — guardians only. Staff school APIs are under `/school/...`;
+ * parents must not call those routes.
+ */
 @ApiTags('portal')
 @ApiBearerAuth()
 @UseGuards(PortalScopeGuard)
@@ -78,6 +87,7 @@ export class PortalController {
     private readonly sessionService: SessionService,
     private readonly patientService: PatientService,
     private readonly portalPayments: PortalPaymentService,
+    private readonly documents: SchoolDocumentService,
   ) {}
 
   @Get('children')
@@ -151,12 +161,45 @@ export class PortalController {
     });
   }
 
+  @Get('iep/:iepId/document')
+  async iepDocument(
+    @Param('iepId') iepId: string,
+    @CurrentUser() user: PortalUser,
+  ) {
+    const plan = await this.prisma.iepPlan.findUnique({ where: { id: iepId } });
+    if (!plan || !user.portalScope!.studentIds.includes(plan.studentId)) {
+      throw DomainException.forbidden('Student not in scope');
+    }
+    if (plan.status !== 'active' && plan.status !== 'archived') {
+      throw DomainException.notFound('IEP plan not found');
+    }
+    return this.documents.iepDocument(iepId);
+  }
+
   @Get('children/:studentId/progress-reports')
   async progressReports(@Param('studentId') studentId: string) {
     return this.prisma.progressReport.findMany({
       where: { studentId, status: 'published' },
       orderBy: { periodStart: 'desc' },
     });
+  }
+
+  @Get('progress-reports/:reportId/document')
+  async progressReportDocument(
+    @Param('reportId') reportId: string,
+    @CurrentUser() user: PortalUser,
+  ) {
+    const report = await this.prisma.progressReport.findUnique({
+      where: { id: reportId },
+    });
+    if (
+      !report ||
+      report.status !== 'published' ||
+      !user.portalScope!.studentIds.includes(report.studentId)
+    ) {
+      throw DomainException.forbidden('Student not in scope');
+    }
+    return this.documents.progressReportDocument(reportId);
   }
 
   @Get('children/:studentId/fees')
@@ -166,6 +209,20 @@ export class PortalController {
       include: { payments: true },
       orderBy: { issueDate: 'desc' },
     });
+  }
+
+  @Get('invoices/:invoiceId/document')
+  async invoiceDocument(
+    @Param('invoiceId') invoiceId: string,
+    @CurrentUser() user: PortalUser,
+  ) {
+    const invoice = await this.prisma.feeInvoice.findUnique({
+      where: { id: invoiceId },
+    });
+    if (!invoice || !user.portalScope!.studentIds.includes(invoice.studentId)) {
+      throw DomainException.forbidden('Student not in scope');
+    }
+    return this.documents.invoiceDocument(invoiceId);
   }
 
   @Post('children/:studentId/fees/pay')
@@ -272,6 +329,31 @@ export class PortalController {
     });
   }
 
+  @Get('notifications')
+  async notifications(
+    @CurrentUser() user: PortalUser,
+    @Query('unread') unread?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const take = Math.min(Number(pageSize) || 20, 100);
+    const skip = ((Number(page) || 1) - 1) * take;
+    const where = {
+      userId: user.id,
+      ...(unread === 'true' ? { readAt: null } : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.notification.count({ where }),
+    ]);
+    return { items, total, page: Number(page) || 1, pageSize: take };
+  }
+
   @Post('messages')
   @Audit({ module: 'portal', entity: 'message', action: 'create' })
   async postMessage(@Body() dto: MessageDto, @CurrentUser() user: PortalUser) {
@@ -299,6 +381,41 @@ export class PortalController {
       studentId: dto.studentId,
     });
     return thread;
+  }
+
+  @Post('messages/:threadId/reply')
+  @Audit({ module: 'portal', entity: 'message', action: 'reply' })
+  async replyMessage(
+    @Param('threadId') threadId: string,
+    @Body() dto: MessageReplyDto,
+    @CurrentUser() user: PortalUser,
+  ) {
+    const thread = await this.prisma.portalMessageThread.findUnique({
+      where: { id: threadId },
+    });
+    if (!thread || !user.portalScope!.studentIds.includes(thread.studentId)) {
+      throw DomainException.forbidden('Student not in scope');
+    }
+    const [message] = await this.prisma.$transaction([
+      this.prisma.portalMessage.create({
+        data: {
+          threadId,
+          studentId: thread.studentId,
+          senderUserId: user.id,
+          senderType: 'guardian',
+          body: dto.body,
+        },
+      }),
+      this.prisma.portalMessageThread.update({
+        where: { id: threadId },
+        data: { lastMessageAt: new Date() },
+      }),
+    ]);
+    await this.events.emitAsync(EventNames.PORTAL_MESSAGE_POSTED, {
+      threadId,
+      studentId: thread.studentId,
+    });
+    return message;
   }
 
   @Post('guardian-change-request')

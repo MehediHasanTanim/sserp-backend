@@ -1,5 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { CurrentUser, AuthUser, Audit } from '../../../shared/decorators';
 import { AttachmentService, MinioService } from '../services/minio.service';
@@ -20,6 +31,13 @@ class ConfirmDto {
   @IsOptional() @IsString() entityId?: string;
 }
 
+type UploadedMultipartFile = {
+  buffer: Buffer;
+  size: number;
+  mimetype: string;
+  originalname: string;
+};
+
 @ApiTags('files')
 @ApiBearerAuth()
 @Controller('files')
@@ -34,6 +52,32 @@ export class FilesController {
     return this.minio.presignUpload(dto.bucket, dto.mimeType, dto.sizeBytes);
   }
 
+  @Post('upload')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 50 * 1024 * 1024 },
+    }),
+  )
+  @Audit({ module: 'files', entity: 'attachment', action: 'upload' })
+  upload(
+    @UploadedFile() file: UploadedMultipartFile | undefined,
+    @Body('bucket') bucket: string,
+  ) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+    if (!bucket?.trim()) {
+      throw new BadRequestException('bucket is required');
+    }
+    return this.minio.uploadBuffer(
+      bucket.trim(),
+      file.buffer,
+      file.size,
+      file.mimetype || 'application/octet-stream',
+    );
+  }
+
   @Post('confirm')
   @Audit({ module: 'files', entity: 'attachment', action: 'confirm' })
   confirm(@Body() dto: ConfirmDto, @CurrentUser() user: AuthUser) {
@@ -42,11 +86,10 @@ export class FilesController {
 
   @Get(':attachmentId/download-url')
   download(@Param('attachmentId') id: string, @CurrentUser() user: AuthUser) {
-    return this.attachments.downloadUrl(
-      id,
-      user.id,
-      user.roles.includes('super_admin'),
-    );
+    return this.attachments.downloadUrl(id, user.id, {
+      isSuperAdmin: user.roles.includes('super_admin'),
+      permissions: user.permissions ?? [],
+    });
   }
 
   @Delete(':attachmentId')

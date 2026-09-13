@@ -21,11 +21,57 @@ export default () =>
       durationMinutes: Number(process.env.LOCKOUT_DURATION_MINUTES ?? 15),
     },
     minio: {
-      endpoint: process.env.MINIO_ENDPOINT,
-      port: Number(process.env.MINIO_PORT ?? 9000),
-      accessKey: process.env.MINIO_ACCESS_KEY,
-      secretKey: process.env.MINIO_SECRET_KEY,
-      useSSL: process.env.MINIO_USE_SSL === 'true',
+      // Back-compat alias — prefer `storage`
+      endpoint: process.env.R2_ENDPOINT
+        ? process.env.R2_ENDPOINT
+        : process.env.R2_ACCOUNT_ID
+          ? `${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+          : process.env.MINIO_ENDPOINT,
+      port: Number(
+        process.env.R2_PORT ??
+          process.env.MINIO_PORT ??
+          (process.env.R2_ACCOUNT_ID || process.env.R2_USE_SSL === 'true'
+            ? 443
+            : 9000),
+      ),
+      accessKey:
+        process.env.R2_ACCESS_KEY_ID ?? process.env.MINIO_ACCESS_KEY,
+      secretKey:
+        process.env.R2_SECRET_ACCESS_KEY ?? process.env.MINIO_SECRET_KEY,
+      useSSL:
+        process.env.R2_USE_SSL === 'true' ||
+        process.env.MINIO_USE_SSL === 'true' ||
+        !!process.env.R2_ACCOUNT_ID,
+      region: process.env.R2_REGION ?? process.env.MINIO_REGION ?? 'auto',
+      pathStyle: process.env.R2_PATH_STYLE !== 'false',
+      healthBucket: process.env.R2_BUCKET_NAME ?? 'sserp',
+      presignTtlSeconds: Number(process.env.PRESIGN_TTL_SECONDS ?? 900),
+    },
+    storage: {
+      endpoint: process.env.R2_ENDPOINT
+        ? process.env.R2_ENDPOINT
+        : process.env.R2_ACCOUNT_ID
+          ? `${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+          : process.env.MINIO_ENDPOINT,
+      port: Number(
+        process.env.R2_PORT ??
+          process.env.MINIO_PORT ??
+          (process.env.R2_ACCOUNT_ID || process.env.R2_USE_SSL === 'true'
+            ? 443
+            : 9000),
+      ),
+      accessKey:
+        process.env.R2_ACCESS_KEY_ID ?? process.env.MINIO_ACCESS_KEY,
+      secretKey:
+        process.env.R2_SECRET_ACCESS_KEY ?? process.env.MINIO_SECRET_KEY,
+      useSSL:
+        process.env.R2_USE_SSL === 'true' ||
+        process.env.MINIO_USE_SSL === 'true' ||
+        !!process.env.R2_ACCOUNT_ID,
+      region: process.env.R2_REGION ?? process.env.MINIO_REGION ?? 'auto',
+      pathStyle: process.env.R2_PATH_STYLE !== 'false',
+      bucketName: process.env.R2_BUCKET_NAME ?? 'sserp',
+      publicUrl: process.env.R2_PUBLIC_URL ?? '',
       presignTtlSeconds: Number(process.env.PRESIGN_TTL_SECONDS ?? 900),
     },
     smtp: {
@@ -89,6 +135,21 @@ export interface AppConfig {
     accessKey: string;
     secretKey: string;
     useSSL: boolean;
+    region: string;
+    pathStyle: boolean;
+    healthBucket: string;
+    presignTtlSeconds: number;
+  };
+  storage: {
+    endpoint: string;
+    port: number;
+    accessKey: string;
+    secretKey: string;
+    useSSL: boolean;
+    region: string;
+    pathStyle: boolean;
+    bucketName: string;
+    publicUrl: string;
     presignTtlSeconds: number;
   };
   smtp: {

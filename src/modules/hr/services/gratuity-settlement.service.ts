@@ -58,6 +58,7 @@ export class GratuitySettlementService {
     const employee = await this.prisma.employee.findFirst({
       where: { id: employeeId, deletedAt: null },
       include: {
+        department: { select: { code: true } },
         salaryStructures: {
           where: { status: 'active' },
           include: { lines: { include: { salaryComponent: true } } },
@@ -145,7 +146,7 @@ export class GratuitySettlementService {
     const cumulativeProvisionAtExit = priorAgg._sum.provisionAmount ?? 0;
     const afterForfeiture = Math.max(0, grossAmount);
     const netPayable = Math.max(0, afterForfeiture - deductionsAmount);
-    const costCenter = costCenterForDepartment(employee.department);
+    const costCenter = costCenterForDepartment(employee.department.code);
 
     const payment = await this.prisma.$transaction(async (tx) => {
       const row = await tx.gratuityPayment.create({

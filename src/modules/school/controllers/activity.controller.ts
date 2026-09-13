@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -8,7 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import {
   Roles,
   Permissions,
@@ -20,31 +21,19 @@ import {
   ActivityService,
   ActivityEnrollmentService,
   ActivityAttendanceService,
+  ActivityMediaService,
 } from '../services/activity.service';
-
-class CreateActivityDto {
-  @IsString() activityTypeId!: string;
-  @IsString() name!: string;
-  @IsOptional() @IsString() description?: string;
-  @IsString() activityDate!: string;
-  @IsInt() @Min(1) capacity!: number;
-  @IsOptional() @IsInt() feeAmount?: number;
-  @IsString() optInDeadline!: string;
-  @IsOptional() @IsString() venue?: string;
-}
+import {
+  AddActivityMediaDto,
+  CreateActivityDto,
+  InviteActivityDto,
+  MarkActivityAttendanceDto,
+} from '../dto/activity.dto';
 
 class RespondEnrollmentDto {
   @IsString() studentId!: string;
   @IsBoolean() accept!: boolean;
   @IsOptional() @IsString() declinedReason?: string;
-}
-
-class BulkActivityAttendanceDto {
-  marks!: Array<{
-    studentId: string;
-    status: 'present' | 'absent' | 'withdrew_last_minute';
-    remarks?: string;
-  }>;
 }
 
 @ApiTags('school-activities')
@@ -55,6 +44,7 @@ export class ActivityController {
     private readonly activities: ActivityService,
     private readonly enrollments: ActivityEnrollmentService,
     private readonly attendance: ActivityAttendanceService,
+    private readonly media: ActivityMediaService,
   ) {}
 
   @Get('activity-types')
@@ -70,6 +60,36 @@ export class ActivityController {
   @Audit({ module: 'school', entity: 'activity_type', action: 'create' })
   createType(@Body() body: { name: string; defaultFeeAmount?: number }) {
     return this.activities.createType(body);
+  }
+
+  @Patch('activity-types/:id')
+  @Roles('super_admin', 'coordinator')
+  @Permissions('school:update')
+  @Audit({ module: 'school', entity: 'activity_type', action: 'update' })
+  updateType(
+    @Param('id') id: string,
+    @Body()
+    body: Partial<{ name: string; defaultFeeAmount: number; isActive: boolean }>,
+  ) {
+    return this.activities.updateType(id, body);
+  }
+
+  @Get('activities/calendar')
+  @Roles(
+    'super_admin',
+    'coordinator',
+    'teacher',
+    'receptionist',
+    'accountant',
+    'principal',
+  )
+  @Permissions('school:read')
+  @ApiOperation({ summary: 'Calendar feed of outdoor activities' })
+  calendar(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.activities.calendar({
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+    });
   }
 
   @Get('activities')
@@ -126,6 +146,19 @@ export class ActivityController {
     return this.enrollments.listEnrollments(id);
   }
 
+  @Post('activities/:id/invite')
+  @Roles('super_admin', 'coordinator')
+  @Permissions('school:create')
+  @Audit({ module: 'school', entity: 'activity_enrollment', action: 'invite' })
+  @ApiOperation({ summary: 'Send opt-in invitations to students' })
+  invite(
+    @Param('id') id: string,
+    @Body() dto: InviteActivityDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.enrollments.invite(id, dto.studentIds, user.id);
+  }
+
   @Post('activities/:id/enrollments')
   @Roles('super_admin', 'coordinator')
   @Permissions('school:create')
@@ -164,16 +197,54 @@ export class ActivityController {
   @Permissions('school:create')
   markAttendance(
     @Param('id') id: string,
-    @Body() dto: BulkActivityAttendanceDto,
+    @Body() dto: MarkActivityAttendanceDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.attendance.bulkMark(id, dto.marks, user.id);
+    return this.attendance.bulkMark(id, dto.items, user.id);
+  }
+
+  @Get('activities/:id/media')
+  @Roles('super_admin', 'coordinator', 'teacher', 'principal')
+  @Permissions('school:read')
+  @ApiOperation({ summary: 'List activity media' })
+  listMedia(@Param('id') id: string) {
+    return this.media.list(id);
+  }
+
+  @Post('activities/:id/media')
+  @Roles('super_admin', 'coordinator')
+  @Permissions('school:create')
+  @Audit({ module: 'school', entity: 'activity_media', action: 'create' })
+  @ApiOperation({ summary: 'Attach uploaded media to an activity' })
+  addMedia(@Param('id') id: string, @Body() dto: AddActivityMediaDto) {
+    return this.media.add(id, dto);
+  }
+
+  @Delete('activities/:id/media/:mediaId')
+  @Roles('super_admin', 'coordinator')
+  @Permissions('school:update')
+  @Audit({ module: 'school', entity: 'activity_media', action: 'delete' })
+  @ApiOperation({ summary: 'Remove activity media' })
+  removeMedia(@Param('id') id: string, @Param('mediaId') mediaId: string) {
+    return this.media.remove(id, mediaId);
+  }
+
+  @Get('activities/:id/summary')
+  @Roles('super_admin', 'coordinator', 'teacher', 'principal')
+  @Permissions('school:read')
+  @ApiOperation({ summary: 'Get post-activity summary notes' })
+  summary(@Param('id') id: string) {
+    return this.activities.getSummary(id);
   }
 
   @Patch('activities/:id/summary')
   @Roles('super_admin', 'coordinator')
   @Permissions('school:update')
-  summary(@Param('id') id: string, @Body() body: { postSummary: string }) {
-    return this.activities.setSummary(id, body.postSummary);
+  summaryPatch(
+    @Param('id') id: string,
+    @Body() body: { notes?: string; postSummary?: string },
+  ) {
+    const notes = body.notes ?? body.postSummary ?? '';
+    return this.activities.setSummary(id, notes);
   }
 }

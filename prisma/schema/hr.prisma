@@ -1,3 +1,39 @@
+model Department {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String    @unique
+  name        String
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  designations Designation[]
+  employees    Employee[]
+
+  @@map("hr_departments")
+}
+
+model Designation {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code         String?
+  name         String
+  departmentId String    @map("department_id") @db.Uuid
+  description  String?
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  department Department @relation(fields: [departmentId], references: [id])
+  employees  Employee[]
+
+  @@unique([departmentId, name])
+  @@index([departmentId])
+  @@map("hr_designations")
+}
+
 model Employee {
   id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   employeeCode       String         @unique @map("employee_code")
@@ -9,8 +45,8 @@ model Employee {
   phone              String?
   address            Json?
   photoAttachmentId  String?        @map("photo_attachment_id") @db.Uuid
-  department         HrDepartment
-  designation        String
+  departmentId       String         @map("department_id") @db.Uuid
+  designationId      String         @map("designation_id") @db.Uuid
   employmentType     EmploymentType @map("employment_type")
   reportingManagerId String?        @map("reporting_manager_id") @db.Uuid
   joiningDate        DateTime       @map("joining_date") @db.Date
@@ -25,6 +61,8 @@ model Employee {
   updatedBy          String?        @map("updated_by") @db.Uuid
   deletedAt          DateTime?      @map("deleted_at")
 
+  department       Department @relation(fields: [departmentId], references: [id])
+  designation      Designation @relation(fields: [designationId], references: [id])
   reportingManager Employee?  @relation("EmployeeManager", fields: [reportingManagerId], references: [id])
   directReports    Employee[] @relation("EmployeeManager")
   user             User?
@@ -59,7 +97,8 @@ model Employee {
   benefitEnrollments        BenefitEnrollment[]
   loans                     EmployeeLoan[]
 
-  @@index([department, status])
+  @@index([departmentId, status])
+  @@index([designationId])
   @@map("employees")
 }
 

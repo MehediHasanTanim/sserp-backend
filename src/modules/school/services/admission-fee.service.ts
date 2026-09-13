@@ -9,6 +9,7 @@ import {
 import { EventNames } from '../../../shared/events/event-names';
 import { NumberingService } from '../../admin/services/organization.service';
 import { LedgerPort } from '../../../shared/ports/ledger.port';
+import { PdfRendererService } from '../../files/pdf/pdf-renderer.service';
 import { StudentStatusService } from './student-status.service';
 
 export interface PayAdmissionFeeInput {
@@ -38,6 +39,7 @@ export class AdmissionFeeService {
     private readonly numbering: NumberingService,
     private readonly events: EventEmitter2,
     private readonly ledger: LedgerPort,
+    private readonly pdfRenderer: PdfRendererService,
     private readonly studentStatus: StudentStatusService,
   ) {}
 
@@ -259,5 +261,52 @@ export class AdmissionFeeService {
       where: { id },
       data: input,
     });
+  }
+
+  async buildReceiptPdf(studentId: string) {
+    const fee = await this.prisma.admissionFee.findUnique({
+      where: { studentId },
+    });
+    if (!fee) throw DomainException.notFound('Admission fee not found');
+    if (fee.status !== 'paid' || !fee.receiptNumber) {
+      throw DomainException.conflict(
+        'A receipt is only available after admission fee payment',
+      );
+    }
+
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, deletedAt: null },
+      include: { shift: true },
+    });
+    if (!student) throw DomainException.notFound('Student not found');
+
+    const paidAmount = fee.paidAmount ?? fee.amount;
+    const amountLabel = `BDT ${(paidAmount / 100).toFixed(2)}`;
+    const paidDateLabel =
+      fee.paidDate?.toISOString().slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+
+    const pdf = await this.pdfRenderer.renderPdf({
+      templateName: 'admission-fee-receipt',
+      data: {
+        receipt: {
+          number: fee.receiptNumber,
+          amount: amountLabel,
+          paymentMethod: fee.paymentMethod ?? 'N/A',
+          paymentReference: fee.paymentReference ?? 'N/A',
+          paidDate: paidDateLabel,
+          status: fee.status,
+        },
+        student: {
+          fullName: student.fullName,
+          studentCode: student.studentCode,
+          shiftName: student.shift?.name ?? 'N/A',
+        },
+      },
+    });
+
+    return {
+      buffer: pdf.buffer,
+      receiptNumber: fee.receiptNumber,
+    };
   }
 }

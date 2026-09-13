@@ -9,7 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { EmployeeStatus, EmploymentType, HrDepartment } from '@prisma/client';
+import { EmployeeStatus, EmploymentType } from '@prisma/client';
 import {
   Roles,
   Permissions,
@@ -43,7 +43,8 @@ export class EmployeeController {
   list(
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
-    @Query('department') department?: HrDepartment,
+    @Query('department') department?: string,
+    @Query('departmentId') departmentId?: string,
     @Query('employmentType') employmentType?: EmploymentType,
     @Query('status') status?: EmployeeStatus,
     @Query('reportingManagerId') reportingManagerId?: string,
@@ -53,6 +54,7 @@ export class EmployeeController {
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
       department,
+      departmentId,
       employmentType,
       status,
       reportingManagerId,

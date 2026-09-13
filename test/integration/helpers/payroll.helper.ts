@@ -4,6 +4,7 @@ import { PrismaService } from '../../../src/shared/prisma/prisma.service';
 import { EmployeeService } from '../../../src/modules/hr/services/employee.service';
 import { SalaryStructureService } from '../../../src/modules/hr/services/salary-structure.service';
 import { PayrollRunService } from '../../../src/modules/hr/services/payroll-run.service';
+import { OrgStructureService } from '../../../src/modules/hr/services/org-structure.service';
 
 export const ACTOR_ID = '00000000-0000-4000-8000-000000000001';
 
@@ -43,6 +44,7 @@ export async function seedPayrollEmployee(
   const prisma = app.get(PrismaService);
   const employees = app.get(EmployeeService);
   const structures = app.get(SalaryStructureService);
+  const org = app.get(OrgStructureService);
 
   const group = await prisma.payrollGroup.findFirstOrThrow({
     where: { name: 'Default Monthly' },
@@ -51,11 +53,16 @@ export async function seedPayrollEmployee(
     where: { code: 'BASIC' },
   });
 
+  const { departmentId, designationId } = await org.resolveIdsByCodeAndName(
+    'administration',
+    'Officer',
+  );
+
   const employee = await employees.create(
     {
       fullName: opts?.fullName ?? `Payroll Emp ${randomUUID().slice(0, 8)}`,
-      department: 'administration',
-      designation: 'Officer',
+      departmentId,
+      designationId,
       employmentType: 'permanent',
       joiningDate: opts?.joiningDate ?? '2018-01-01',
       basicSalary: opts?.basicAmount ?? 5_000_000,

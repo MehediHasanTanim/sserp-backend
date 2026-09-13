@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles, Permissions, Audit } from '../../../shared/decorators';
 import { TeacherService } from '../services/teacher.service';
@@ -43,6 +43,14 @@ export class TeacherController {
   @Audit({ module: 'school', entity: 'teacher', action: 'update' })
   update(@Param('id') id: string, @Body() dto: UpdateTeacherDto) {
     return this.teachers.update(id, dto);
+  }
+
+  @Delete(':id')
+  @Roles('coordinator', 'super_admin')
+  @Permissions('school:delete')
+  @Audit({ module: 'school', entity: 'teacher', action: 'delete' })
+  remove(@Param('id') id: string) {
+    return this.teachers.remove(id);
   }
 
   @Put(':id/shifts')

@@ -26,11 +26,19 @@ export class CurriculumService {
   }
 
   async createSkillDomain(input: CreateSkillDomainDto) {
+    const sequence =
+      input.sequence ??
+      ((
+        await this.prisma.skillDomain.aggregate({
+          _max: { sequence: true },
+        })
+      )._max.sequence ?? -1) + 1;
+
     return this.prisma.skillDomain.create({
       data: {
         name: input.name,
         description: input.description,
-        sequence: input.sequence,
+        sequence,
         isActive: input.isActive ?? true,
       },
     });
@@ -107,12 +115,22 @@ export class CurriculumService {
       where: { id: input.skillDomainId },
     });
     if (!skillDomain) throw DomainException.notFound('Skill domain not found');
+
+    const sequence =
+      input.sequence ??
+      ((
+        await this.prisma.learningObjective.aggregate({
+          where: { curriculumId },
+          _max: { sequence: true },
+        })
+      )._max.sequence ?? -1) + 1;
+
     return this.prisma.learningObjective.create({
       data: {
         curriculumId,
         skillDomainId: input.skillDomainId,
         description: input.description,
-        sequence: input.sequence,
+        sequence,
       },
     });
   }

@@ -13,6 +13,7 @@ import { seedPhase6 } from './phase6.seed';
 import { seedPhase7 } from './phase7.seed';
 import { seedPhase8 } from './phase8.seed';
 import { seedDemo } from './demo.seed';
+import { seedHrOrg } from './hr-org.seed';
 
 const prisma = new PrismaClient();
 
@@ -425,6 +426,9 @@ async function main() {
   });
 
   console.log('Reference seed complete');
+
+  await seedHrOrg(prisma);
+  console.log('HR org (departments/designations) seed complete');
 
   await seedPhase1(prisma);
   await seedPhase2(prisma);

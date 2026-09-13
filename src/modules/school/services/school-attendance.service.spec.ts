@@ -100,6 +100,12 @@ describe('SchoolAttendanceService', () => {
       // denominator = 10 working days - 1 excused = 9
       // percentage = 6.5 / 9 * 100 = 72.222... -> rounded to 72.22
       expect(summary.workingDays).toBe(10);
+      expect(summary.presentDays).toBe(5);
+      expect(summary.lateDays).toBe(1);
+      expect(summary.halfDays).toBe(1);
+      expect(summary.absentDays).toBe(2);
+      expect(summary.excusedDays).toBe(1);
+      expect(summary.medicalDays).toBe(0);
       expect(summary.presentEquivalent).toBe(6.5);
       expect(summary.countedDays).toBe(9);
       expect(summary.percentage).toBeCloseTo(72.22, 2);

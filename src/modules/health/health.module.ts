@@ -35,7 +35,7 @@ export class MinioHealthIndicator {
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
-      await this.minio.raw.listBuckets();
+      await this.minio.ping();
       return { [key]: { status: 'up' } };
     } catch {
       return { [key]: { status: 'down' } };

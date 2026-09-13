@@ -9,6 +9,7 @@ import {
 import { EventNames } from '../../../shared/events/event-names';
 import { NumberingService } from '../../admin/services/organization.service';
 import { BudgetCheckService } from '../../accounts/services/budget-check.service';
+import { OrgStructureService } from './org-structure.service';
 
 const STAGE_ORDER: ApplicantStage[] = [
   'applied',
@@ -26,6 +27,7 @@ export class RecruitmentService {
     private readonly numbering: NumberingService,
     private readonly events: EventEmitter2,
     private readonly budgetCheck: BudgetCheckService,
+    private readonly org: OrgStructureService,
   ) {}
 
   // ---- Requisitions --------------------------------------------------
@@ -439,13 +441,13 @@ export class RecruitmentService {
       gross?: number;
     };
     const basicSalary = offeredSalary?.basicSalary ?? offeredSalary?.gross ?? 0;
-    const dept = (
+    const deptCode = (
       ['school', 'therapy', 'administration', 'support'].includes(
         offer.offeredDepartment,
       )
         ? offer.offeredDepartment
         : 'administration'
-    ) as 'school' | 'therapy' | 'administration' | 'support';
+    ) as string;
     const empType = (
       ['permanent', 'contractual', 'part_time'].includes(
         applicant.posting.requisition.employmentType,
@@ -454,6 +456,12 @@ export class RecruitmentService {
         : 'permanent'
     ) as 'permanent' | 'contractual' | 'part_time';
 
+    const { departmentId, designationId } =
+      await this.org.resolveIdsByCodeAndName(
+        deptCode,
+        offer.offeredDesignation,
+      );
+
     const employee = await this.prisma.$transaction(async (tx) => {
       const emp = await tx.employee.create({
         data: {
@@ -461,8 +469,8 @@ export class RecruitmentService {
           fullName: applicant.fullName,
           personalEmail: applicant.email,
           phone: applicant.phone,
-          department: dept,
-          designation: offer.offeredDesignation,
+          departmentId,
+          designationId,
           employmentType: empType,
           joiningDate: offer.joiningDate,
           basicSalary,

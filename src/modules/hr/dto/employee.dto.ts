@@ -2,7 +2,6 @@ import {
   EmployeeStatus,
   EmploymentType,
   ExitType,
-  HrDepartment,
 } from '@prisma/client';
 import {
   IsDateString,
@@ -25,8 +24,8 @@ export class CreateEmployeeDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsObject() address?: Record<string, unknown>;
   @IsOptional() @IsUUID() photoAttachmentId?: string;
-  @IsEnum(HrDepartment) department!: HrDepartment;
-  @IsString() designation!: string;
+  @IsUUID() departmentId!: string;
+  @IsUUID() designationId!: string;
   @IsEnum(EmploymentType) employmentType!: EmploymentType;
   @IsOptional() @IsUUID() reportingManagerId?: string;
   @IsDateString() joiningDate!: string;
@@ -43,8 +42,8 @@ export class UpdateEmployeeDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsObject() address?: Record<string, unknown>;
   @IsOptional() @IsUUID() photoAttachmentId?: string;
-  @IsOptional() @IsEnum(HrDepartment) department?: HrDepartment;
-  @IsOptional() @IsString() designation?: string;
+  @IsOptional() @IsUUID() departmentId?: string;
+  @IsOptional() @IsUUID() designationId?: string;
   @IsOptional() @IsEnum(EmploymentType) employmentType?: EmploymentType;
   @IsOptional() @IsUUID() reportingManagerId?: string;
   @IsOptional() @IsDateString() probationEndDate?: string;
@@ -53,8 +52,8 @@ export class UpdateEmployeeDto {
 }
 
 export class TransferEmployeeDto {
-  @IsOptional() @IsEnum(HrDepartment) department?: HrDepartment;
-  @IsOptional() @IsString() designation?: string;
+  @IsOptional() @IsUUID() departmentId?: string;
+  @IsOptional() @IsUUID() designationId?: string;
   @IsOptional() @IsUUID() reportingManagerId?: string;
   @IsDateString() effectiveDate!: string;
   @IsString() @MinLength(1) reason!: string;

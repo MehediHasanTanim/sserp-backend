@@ -116,6 +116,36 @@ export class TeacherService {
     });
   }
 
+  async remove(id: string) {
+    const teacher = await this.prisma.teacher.findUnique({ where: { id } });
+    if (!teacher) throw DomainException.notFound('Teacher not found');
+
+    return this.prisma.$transaction(async (tx) => {
+      const today = new Date();
+      await tx.studentTeacherMapping.updateMany({
+        where: { teacherEmployeeId: teacher.employeeId, isActive: true },
+        data: {
+          isActive: false,
+          endDate: today,
+          endedReason: 'Teacher profile removed',
+        },
+      });
+      await tx.teacherShiftAssignment.deleteMany({
+        where: { teacherId: id },
+      });
+      await tx.teacherCertification.deleteMany({
+        where: { teacherId: id },
+      });
+      await tx.activitySupervisor.deleteMany({
+        where: { teacherId: id },
+      });
+      await tx.teacher.delete({
+        where: { id },
+      });
+      return { ok: true };
+    });
+  }
+
   /** A teacher may hold at most two active shift assignments (one per shift). */
   async setShifts(id: string, shiftIds: string[]) {
     const teacher = await this.prisma.teacher.findUnique({ where: { id } });

@@ -13,8 +13,21 @@ import { EventNames } from '../../../shared/events/event-names';
 import { CreateIepPlanDto, UpdateIepPlanDto } from '../dto/iep.dto';
 
 const GOAL_INCLUDE = {
-  goals: { orderBy: { sequence: 'asc' as const } },
+  goals: {
+    orderBy: { sequence: 'asc' as const },
+    include: { skillDomain: { select: { id: true, name: true } } },
+  },
   reviews: { orderBy: { scheduledDate: 'desc' as const } },
+};
+
+type PlanWithGoals = {
+  goals: Array<{
+    skillDomainId: string;
+    responsibleTeacherId: string | null;
+    skillDomain?: { id: string; name: string } | null;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
 };
 
 /**
@@ -31,11 +44,12 @@ export class IepService {
   ) {}
 
   async listForStudent(studentId: string) {
-    return this.prisma.iepPlan.findMany({
+    const plans = await this.prisma.iepPlan.findMany({
       where: { studentId },
       include: GOAL_INCLUDE,
       orderBy: { version: 'desc' },
     });
+    return Promise.all(plans.map((plan) => this.withGoalLabels(plan)));
   }
 
   async get(id: string) {
@@ -44,7 +58,44 @@ export class IepService {
       include: GOAL_INCLUDE,
     });
     if (!plan) throw DomainException.notFound('IEP plan not found');
-    return plan;
+    return this.withGoalLabels(plan);
+  }
+
+  /** Attach human-readable domain / teacher labels for API consumers. */
+  private async withGoalLabels<T extends PlanWithGoals>(plan: T) {
+    const teacherIds = [
+      ...new Set(
+        plan.goals
+          .map((g) => g.responsibleTeacherId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const teachers =
+      teacherIds.length > 0
+        ? await this.prisma.teacher.findMany({
+            where: { id: { in: teacherIds } },
+            include: {
+              employee: { select: { fullName: true, employeeCode: true } },
+            },
+          })
+        : [];
+    const teacherNameById = new Map(
+      teachers.map((t) => [
+        t.id,
+        t.employee?.fullName ?? t.employee?.employeeCode ?? null,
+      ]),
+    );
+
+    return {
+      ...plan,
+      goals: plan.goals.map((goal) => ({
+        ...goal,
+        skillDomainName: goal.skillDomain?.name ?? null,
+        responsibleTeacherName: goal.responsibleTeacherId
+          ? (teacherNameById.get(goal.responsibleTeacherId) ?? null)
+          : null,
+      })),
+    };
   }
 
   /** Creates the first draft (v1) or the next version if prior versions exist. */
@@ -53,13 +104,14 @@ export class IepService {
       where: { id: studentId, deletedAt: null },
     });
     if (!student) throw DomainException.notFound('Student not found');
+    this.assertDateRange(input.startDate, input.endDate);
 
     const last = await this.prisma.iepPlan.findFirst({
       where: { studentId },
       orderBy: { version: 'desc' },
     });
 
-    return this.prisma.iepPlan.create({
+    const created = await this.prisma.iepPlan.create({
       data: {
         studentId,
         academicYearId: input.academicYearId,
@@ -68,24 +120,40 @@ export class IepService {
         createdByTeacherId: input.createdByTeacherId,
         reviewFrequencyMonths: input.reviewFrequencyMonths ?? 3,
         startDate: input.startDate ? new Date(input.startDate) : undefined,
+        endDate: input.endDate ? new Date(input.endDate) : undefined,
       },
       include: GOAL_INCLUDE,
     });
+    return this.withGoalLabels(created);
   }
 
   /** I-02: only draft plans are editable. */
   async update(id: string, input: UpdateIepPlanDto) {
     const plan = await this.get(id);
     this.assertEditable(plan);
-    return this.prisma.iepPlan.update({
+    this.assertDateRange(
+      input.startDate ?? plan.startDate?.toISOString().slice(0, 10),
+      input.endDate ?? plan.endDate?.toISOString().slice(0, 10),
+    );
+    const updated = await this.prisma.iepPlan.update({
       where: { id },
       data: {
         reviewFrequencyMonths: input.reviewFrequencyMonths,
         startDate: input.startDate ? new Date(input.startDate) : undefined,
+        endDate: input.endDate ? new Date(input.endDate) : undefined,
         createdByTeacherId: input.createdByTeacherId,
       },
       include: GOAL_INCLUDE,
     });
+    return this.withGoalLabels(updated);
+  }
+
+  private assertDateRange(startDate?: string | null, endDate?: string | null) {
+    if (startDate && endDate && startDate > endDate) {
+      throw DomainException.validation(
+        'endDate must be on or after startDate',
+      );
+    }
   }
 
   private assertEditable(plan: IepPlan) {
@@ -113,6 +181,7 @@ export class IepService {
           createdByTeacherId: actorId,
           reviewFrequencyMonths: source.reviewFrequencyMonths,
           startDate: source.startDate,
+          endDate: source.endDate,
         },
       });
 
@@ -148,7 +217,7 @@ export class IepService {
       version: created!.version,
     });
 
-    return created;
+    return this.withGoalLabels(created!);
   }
 
   /**
@@ -228,7 +297,7 @@ export class IepService {
       nextReviewDate,
     });
 
-    return result;
+    return this.withGoalLabels(result);
   }
 
   private async enqueuePdf(plan: IepPlan) {
@@ -243,11 +312,54 @@ export class IepService {
     if (plan.status === 'archived') {
       throw DomainException.conflict('IEP plan is already archived');
     }
-    return this.prisma.iepPlan.update({
+    const archived = await this.prisma.iepPlan.update({
       where: { id },
       data: { status: 'archived' },
       include: GOAL_INCLUDE,
     });
+    return this.withGoalLabels(archived);
+  }
+
+  /**
+   * Permanently removes a draft IEP. Published/active/archived plans cannot
+   * be deleted — archive or revise instead.
+   */
+  async deleteDraft(id: string) {
+    const plan = await this.prisma.iepPlan.findUnique({
+      where: { id },
+      include: { goals: { select: { id: true } } },
+    });
+    if (!plan) throw DomainException.notFound('IEP plan not found');
+    if (plan.status !== 'draft') {
+      throw DomainException.withCode(
+        ErrorCode.IEP_NOT_EDITABLE,
+        409,
+        'Only draft IEP plans can be deleted',
+      );
+    }
+
+    const goalIds = plan.goals.map((g) => g.id);
+
+    await this.prisma.$transaction(async (tx) => {
+      if (goalIds.length > 0) {
+        await tx.progressReportGoalLink.deleteMany({
+          where: { iepGoalId: { in: goalIds } },
+        });
+        await tx.behavioralIncident.updateMany({
+          where: { linkedIepGoalId: { in: goalIds } },
+          data: { linkedIepGoalId: null },
+        });
+      }
+      // Clear self-references so deleting a draft that was used as a
+      // previousVersion base does not violate the FK.
+      await tx.iepPlan.updateMany({
+        where: { previousVersionId: id },
+        data: { previousVersionId: null },
+      });
+      await tx.iepPlan.delete({ where: { id } });
+    });
+
+    return { id, deleted: true };
   }
 
   /**

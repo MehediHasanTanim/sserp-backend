@@ -66,6 +66,14 @@ export class CreateDiscountDto {
   @IsOptional() @IsDateString() effectiveTo?: string;
 }
 
+/** UI-facing discount request body used by /school/fee-discounts. */
+export class CreateFeeDiscountRequestDto {
+  @IsUUID() studentId!: string;
+  @IsOptional() percentage?: number | null;
+  @IsOptional() @IsInt() @Min(0) fixedAmount?: number | null;
+  @IsString() @MinLength(1) reason!: string;
+}
+
 export class CreateScholarshipDto {
   @IsString() @MinLength(1) name!: string;
   @IsOptional() @IsString() sponsor?: string;

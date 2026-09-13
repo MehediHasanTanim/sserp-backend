@@ -209,10 +209,23 @@ describe('FeeInvoiceService', () => {
       );
 
       expect(result.generated).toBe(1);
-      expect(result.skipped).toEqual(
+      expect(result.skipped).toBe(2);
+      expect(result.lines).toEqual(
         expect.arrayContaining([
-          { studentId: leaveStudent.id, reason: 'not_active:on_leave' },
-          { studentId: alreadyInvoicedStudent.id, reason: 'already_generated' },
+          expect.objectContaining({
+            studentId: leaveStudent.id,
+            status: 'skipped',
+            reason: 'Student not active (on_leave)',
+          }),
+          expect.objectContaining({
+            studentId: alreadyInvoicedStudent.id,
+            status: 'skipped',
+            reason: 'Invoice already generated for period',
+          }),
+          expect.objectContaining({
+            studentId: activeStudent.id,
+            status: 'generated',
+          }),
         ]),
       );
       expect(numbering.nextCode).toHaveBeenCalledTimes(1);
@@ -251,8 +264,13 @@ describe('FeeInvoiceService', () => {
       );
 
       expect(result.generated).toBe(0);
-      expect(result.skipped).toEqual([
-        { studentId: activeStudent.id, reason: 'no_fee_category' },
+      expect(result.skipped).toBe(1);
+      expect(result.lines).toEqual([
+        expect.objectContaining({
+          studentId: activeStudent.id,
+          status: 'skipped',
+          reason: 'No fee category assigned',
+        }),
       ]);
     });
 
@@ -266,8 +284,13 @@ describe('FeeInvoiceService', () => {
       );
 
       expect(result.generated).toBe(0);
-      expect(result.skipped).toEqual([
-        { studentId: activeStudent.id, reason: 'no_fee_structure' },
+      expect(result.skipped).toBe(1);
+      expect(result.lines).toEqual([
+        expect.objectContaining({
+          studentId: activeStudent.id,
+          status: 'skipped',
+          reason: 'No applicable fee structure',
+        }),
       ]);
     });
   });

@@ -62,11 +62,13 @@ export class TeacherMappingService {
       where: { status: 'active' },
       include: {
         shiftAssignments: { where: { isActive: true } },
+        employee: { select: { fullName: true } },
       },
     });
     const results: Array<{
       teacherId: string;
       employeeId: string;
+      employeeName: string | null;
       assignedShiftIds: string[];
       activeMappingShiftIds: string[];
       freeShiftIds: string[];
@@ -85,6 +87,7 @@ export class TeacherMappingService {
         results.push({
           teacherId: teacher.id,
           employeeId: teacher.employeeId,
+          employeeName: teacher.employee?.fullName ?? null,
           assignedShiftIds,
           activeMappingShiftIds,
           freeShiftIds,

@@ -58,13 +58,6 @@ enum PermissionAction {
   export
 }
 
-enum HrDepartment {
-  school
-  therapy
-  administration
-  support
-}
-
 enum EmploymentType {
   permanent
   contractual

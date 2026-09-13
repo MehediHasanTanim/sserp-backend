@@ -83,6 +83,7 @@ model IepPlan {
   reviewFrequencyMonths Int       @default(3) @map("review_frequency_months")
   nextReviewDate        DateTime? @map("next_review_date") @db.Date
   startDate             DateTime? @map("start_date") @db.Date
+  endDate               DateTime? @map("end_date") @db.Date
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 

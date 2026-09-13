@@ -166,6 +166,17 @@ export class StudentController {
     return this.students.addDocument(id, dto);
   }
 
+  @Delete(':id/documents/:documentId')
+  @Roles('coordinator', 'receptionist', 'super_admin')
+  @Permissions('school:delete')
+  @Audit({ module: 'school', entity: 'student_document', action: 'delete' })
+  removeDocument(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.students.removeDocument(id, documentId);
+  }
+
   @Get(':id/attendance')
   @Permissions('school:read')
   async attendanceHistory(

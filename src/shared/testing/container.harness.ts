@@ -198,6 +198,7 @@ function applyContainerEnv(
   process.env.MINIO_ACCESS_KEY = 'minioadmin';
   process.env.MINIO_SECRET_KEY = 'minioadmin';
   process.env.MINIO_USE_SSL = 'false';
+  process.env.R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'sserp';
   process.env.COOKIE_SECURE = 'false';
   process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'error';
   process.env.BOOTSTRAP_ADMIN_PASSWORD =
@@ -223,17 +224,7 @@ async function createMinioBuckets(host: string, port: number): Promise<void> {
     accessKey: 'minioadmin',
     secretKey: 'minioadmin',
   });
-  const buckets = [
-    'student-documents',
-    'iep-documents',
-    'progress-reports',
-    'therapy-attachments',
-    'hr-documents',
-    'invoices-receipts',
-    'activity-media',
-    'leave-documents',
-    'exports',
-  ];
+  const buckets = ['sserp'];
   for (const name of buckets) {
     const exists = await client.bucketExists(name).catch(() => false);
     if (!exists) await client.makeBucket(name, '');

@@ -8,11 +8,15 @@ describe('IepService', () => {
       create: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
+      delete: jest.Mock;
     };
     iepGoal: { create: jest.Mock };
     iepReview: { create: jest.Mock };
     iepAcknowledgment: { findUnique: jest.Mock; create: jest.Mock };
     student: { findFirst: jest.Mock };
+    teacher: { findMany: jest.Mock };
+    progressReportGoalLink: { deleteMany: jest.Mock };
+    behavioralIncident: { updateMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let events: { emitAsync: jest.Mock };
@@ -31,6 +35,7 @@ describe('IepService', () => {
     progressPercentage: 0,
     sequence: 0,
     responsibleTeacherId: 'teacher1',
+    skillDomain: { id: 'domain1', name: 'Communication' },
   };
 
   beforeEach(() => {
@@ -41,11 +46,26 @@ describe('IepService', () => {
         create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        delete: jest.fn().mockResolvedValue({ id: 'iep1' }),
       },
       iepGoal: { create: jest.fn() },
       iepReview: { create: jest.fn().mockResolvedValue({ id: 'review1' }) },
       iepAcknowledgment: { findUnique: jest.fn(), create: jest.fn() },
       student: { findFirst: jest.fn() },
+      teacher: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'teacher1',
+            employee: { fullName: 'Ms. Rahman', employeeCode: 'EMP-1' },
+          },
+        ]),
+      },
+      progressReportGoalLink: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      behavioralIncident: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       $transaction: jest.fn((fn) => fn(prisma)),
     };
     events = { emitAsync: jest.fn().mockResolvedValue(undefined) };
@@ -193,6 +213,37 @@ describe('IepService', () => {
 
       const result = await service.update('iep1', { reviewFrequencyMonths: 6 });
       expect(result.status).toBe('draft');
+    });
+  });
+
+  describe('deleteDraft', () => {
+    it('deletes a draft plan and clears goal references', async () => {
+      prisma.iepPlan.findUnique.mockResolvedValue({
+        id: 'iep1',
+        status: 'draft',
+        goals: [{ id: 'goal1' }],
+      });
+
+      const result = await service.deleteDraft('iep1');
+
+      expect(result).toEqual({ id: 'iep1', deleted: true });
+      expect(prisma.progressReportGoalLink.deleteMany).toHaveBeenCalled();
+      expect(prisma.iepPlan.delete).toHaveBeenCalledWith({
+        where: { id: 'iep1' },
+      });
+    });
+
+    it('rejects deleting a non-draft plan', async () => {
+      prisma.iepPlan.findUnique.mockResolvedValue({
+        id: 'iep1',
+        status: 'active',
+        goals: [],
+      });
+
+      await expect(service.deleteDraft('iep1')).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'IEP_NOT_EDITABLE',
+      });
     });
   });
 

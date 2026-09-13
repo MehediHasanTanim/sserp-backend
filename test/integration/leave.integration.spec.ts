@@ -11,6 +11,7 @@ import { PrismaService } from '../../src/shared/prisma/prisma.service';
 import { LeaveRequestService } from '../../src/modules/hr/services/leave-request.service';
 import { LeaveApprovalService } from '../../src/modules/hr/services/leave-approval.service';
 import { LeaveBalanceService } from '../../src/modules/hr/services/leave-balance.service';
+import { employeeOrgIds } from './helpers/org.helper';
 
 function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -65,12 +66,17 @@ describe('HR leave request lifecycle integration', () => {
     leaveApprovals = app.get(LeaveApprovalService);
     leaveBalances = app.get(LeaveBalanceService);
 
+    const { departmentId, designationId } = await employeeOrgIds(
+      prisma,
+      'administration',
+      'Test Officer',
+    );
     const employee = await prisma.employee.create({
       data: {
         employeeCode: `EMP-TEST-${randomUUID()}`,
         fullName: 'Leave Flow Test Employee',
-        department: 'administration',
-        designation: 'Test Officer',
+        departmentId,
+        designationId,
         employmentType: 'permanent',
         joiningDate: new Date('2020-01-01'),
         basicSalary: 30000,
@@ -159,5 +165,51 @@ describe('HR leave request lifecycle integration', () => {
       },
     });
     expect(attendanceRows.length).toBe(totalDays);
+  });
+
+  it('allows super_admin to reject at level 1 and release balance hold', async () => {
+    const start = nextWorkingDay(daysFromNowUtc(120));
+    const end = nextWorkingDay(new Date(start.getTime() + 24 * 3600 * 1000));
+
+    const submitted = await leaveRequests.submit({
+      employeeId,
+      leaveTypeId,
+      startDate: toDateOnly(start),
+      endDate: toDateOnly(end),
+      reason: 'Leave to reject',
+    });
+    expect(submitted.status).toBe('pending');
+
+    const rejected = await leaveApprovals.reject(
+      submitted.id,
+      randomUUID(),
+      ['super_admin'],
+      'Rejected by super admin',
+    );
+    expect(rejected.status).toBe('rejected');
+    expect(rejected.rejectionReason).toBe('Rejected by super admin');
+  });
+
+  it('allows super_admin to approve and finalize directly from level 1', async () => {
+    const start = nextWorkingDay(daysFromNowUtc(150));
+    const end = nextWorkingDay(new Date(start.getTime() + 24 * 3600 * 1000));
+
+    const submitted = await leaveRequests.submit({
+      employeeId,
+      leaveTypeId,
+      startDate: toDateOnly(start),
+      endDate: toDateOnly(end),
+      reason: 'Leave to approve by admin',
+    });
+    expect(submitted.status).toBe('pending');
+    expect(submitted.currentApprovalLevel).toBe(1);
+
+    const approved = await leaveApprovals.approve(
+      submitted.id,
+      randomUUID(),
+      ['super_admin'],
+      'Approved by super admin',
+    );
+    expect(approved.status).toBe('approved');
   });
 });

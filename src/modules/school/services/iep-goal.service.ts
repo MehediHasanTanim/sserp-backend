@@ -27,18 +27,60 @@ export class IepGoalService {
 
   async list(iepId: string) {
     await this.getPlan(iepId);
-    return this.prisma.iepGoal.findMany({
+    const goals = await this.prisma.iepGoal.findMany({
       where: { iepId },
+      include: { skillDomain: { select: { id: true, name: true } } },
       orderBy: { sequence: 'asc' },
     });
+    return this.withGoalLabels(goals);
   }
 
   async get(goalId: string) {
     const goal = await this.prisma.iepGoal.findUnique({
       where: { id: goalId },
+      include: { skillDomain: { select: { id: true, name: true } } },
     });
     if (!goal) throw DomainException.notFound('IEP goal not found');
-    return goal;
+    const [labeled] = await this.withGoalLabels([goal]);
+    return labeled;
+  }
+
+  private async withGoalLabels<
+    T extends {
+      responsibleTeacherId: string | null;
+      skillDomain?: { id: string; name: string } | null;
+    },
+  >(goals: T[]) {
+    const teacherIds = [
+      ...new Set(
+        goals
+          .map((g) => g.responsibleTeacherId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const teachers =
+      teacherIds.length > 0
+        ? await this.prisma.teacher.findMany({
+            where: { id: { in: teacherIds } },
+            include: {
+              employee: { select: { fullName: true, employeeCode: true } },
+            },
+          })
+        : [];
+    const teacherNameById = new Map(
+      teachers.map((t) => [
+        t.id,
+        t.employee?.fullName ?? t.employee?.employeeCode ?? null,
+      ]),
+    );
+
+    return goals.map((goal) => ({
+      ...goal,
+      skillDomainName: goal.skillDomain?.name ?? null,
+      responsibleTeacherName: goal.responsibleTeacherId
+        ? (teacherNameById.get(goal.responsibleTeacherId) ?? null)
+        : null,
+    }));
   }
 
   private async getPlan(iepId: string) {
@@ -77,7 +119,7 @@ export class IepGoalService {
     this.assertPlanEditable(plan.status);
     await this.assertActiveTeacher(input.responsibleTeacherId);
 
-    return this.prisma.iepGoal.create({
+    const created = await this.prisma.iepGoal.create({
       data: {
         iepId,
         skillDomainId: input.skillDomainId,
@@ -90,7 +132,10 @@ export class IepGoalService {
         responsibleTeacherId: input.responsibleTeacherId,
         sequence: input.sequence ?? 0,
       },
+      include: { skillDomain: { select: { id: true, name: true } } },
     });
+    const [labeled] = await this.withGoalLabels([created]);
+    return labeled;
   }
 
   async update(goalId: string, input: UpdateIepGoalDto) {
@@ -101,7 +146,7 @@ export class IepGoalService {
       await this.assertActiveTeacher(input.responsibleTeacherId);
     }
 
-    return this.prisma.iepGoal.update({
+    const updated = await this.prisma.iepGoal.update({
       where: { id: goalId },
       data: {
         skillDomainId: input.skillDomainId,
@@ -114,7 +159,10 @@ export class IepGoalService {
         responsibleTeacherId: input.responsibleTeacherId,
         sequence: input.sequence,
       },
+      include: { skillDomain: { select: { id: true, name: true } } },
     });
+    const [labeled] = await this.withGoalLabels([updated]);
+    return labeled;
   }
 
   /**

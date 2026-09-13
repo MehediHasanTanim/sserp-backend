@@ -8,7 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { HrDepartment, LeaveRequestStatus } from '@prisma/client';
+import { LeaveRequestStatus } from '@prisma/client';
 import {
   Roles,
   Permissions,
@@ -76,7 +76,7 @@ export class LeaveRequestController {
   calendar(
     @Query('dateFrom') dateFrom: string,
     @Query('dateTo') dateTo: string,
-    @Query('department') department?: HrDepartment,
+    @Query('department') department?: string,
   ) {
     return this.leaveRequests.calendarView({ dateFrom, dateTo, department });
   }

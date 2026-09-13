@@ -2,6 +2,8 @@ import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { AdminModule } from '../admin/admin.module';
 import { AccountsModule } from '../accounts/accounts.module';
+import { DepartmentController, DesignationController } from './controllers/org-structure.controller';
+import { OrgStructureService } from './services/org-structure.service';
 import { EmployeeController } from './controllers/employee.controller';
 import { EmployeeDocumentController } from './controllers/employee-document.controller';
 import { HrAttendanceController } from './controllers/hr-attendance.controller';
@@ -73,6 +75,8 @@ import { GratuityEntitlementListener } from './listeners/gratuity-entitlement.li
     BullModule.registerQueue({ name: 'pdf' }),
   ],
   controllers: [
+    DepartmentController,
+    DesignationController,
     EmployeeController,
     EmployeeDocumentController,
     HrAttendanceController,
@@ -94,6 +98,7 @@ import { GratuityEntitlementListener } from './listeners/gratuity-entitlement.li
     BenefitsController,
   ],
   providers: [
+    OrgStructureService,
     HrEmployeeReadService,
     EmployeeService,
     EmployeeLifecycleService,
@@ -133,6 +138,7 @@ import { GratuityEntitlementListener } from './listeners/gratuity-entitlement.li
     GratuityEntitlementListener,
   ],
   exports: [
+    OrgStructureService,
     HrEmployeeReadService,
     HrCalendarService,
     HolidayService,

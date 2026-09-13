@@ -57,7 +57,7 @@ export class StudentAttendanceController {
   }
 
   @Post('attendance/bulk')
-  @Roles('coordinator', 'teacher')
+  @Roles('coordinator', 'teacher', 'super_admin')
   @Permissions('school:update')
   @Audit({
     module: 'school',
@@ -75,7 +75,7 @@ export class StudentAttendanceController {
   }
 
   @Patch('attendance/:id')
-  @Roles('coordinator')
+  @Roles('coordinator', 'super_admin')
   @Permissions('school:update')
   @Audit({ module: 'school', entity: 'student_attendance', action: 'update' })
   update(@Param('id') id: string, @Body() dto: UpdateStudentAttendanceDto) {
@@ -83,7 +83,7 @@ export class StudentAttendanceController {
   }
 
   @Post('attendance/:id/amendment')
-  @Roles('teacher', 'coordinator')
+  @Roles('teacher', 'coordinator', 'super_admin')
   @Permissions('school:update')
   @Audit({
     module: 'school',
@@ -99,7 +99,7 @@ export class StudentAttendanceController {
   }
 
   @Patch('attendance/amendments/:id/decide')
-  @Roles('coordinator', 'principal')
+  @Roles('coordinator', 'principal', 'super_admin')
   @Permissions('school:approve')
   @Audit({ module: 'school', entity: 'attendance_amendment', action: 'decide' })
   decideAmendment(
@@ -111,7 +111,7 @@ export class StudentAttendanceController {
   }
 
   @Get('attendance/monthly-summary')
-  @Roles('coordinator', 'principal', 'teacher')
+  @Roles('coordinator', 'principal', 'teacher', 'super_admin')
   @Permissions('school:read')
   monthlySummary(
     @Query('studentId') studentId: string,

@@ -38,8 +38,9 @@ export class PurchaseRequestService {
   async resolveDepartmentForUser(userId: string): Promise<string> {
     const employee = await this.prisma.employee.findFirst({
       where: { user: { id: userId }, deletedAt: null },
+      include: { department: { select: { code: true } } },
     });
-    return employee?.department ?? 'administration';
+    return employee?.department.code ?? 'administration';
   }
 
   async resolveEmployeeIdForUser(userId: string) {

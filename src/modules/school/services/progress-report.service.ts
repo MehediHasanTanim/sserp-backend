@@ -2,7 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ProgressReport, ProgressReportType } from '@prisma/client';
+import { ProgressReport, ProgressReportStatus, ProgressReportType } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import {
   DomainException,
@@ -38,7 +38,10 @@ export class ProgressReportService {
 
   async listTemplates(reportType?: ProgressReportType) {
     return this.prisma.reportTemplate.findMany({
-      where: reportType ? { reportType } : undefined,
+      where: {
+        isActive: true,
+        ...(reportType ? { reportType } : {}),
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -111,6 +114,40 @@ export class ProgressReportService {
     });
   }
 
+  /** Cross-student status board for coordinators / principals. */
+  async listBoard(query: {
+    page?: number;
+    pageSize?: number;
+    status?: ProgressReportStatus;
+  }) {
+    const page = Math.max(query.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(query.pageSize ?? 50, 1), 100);
+    const where = {
+      ...(query.status ? { status: query.status } : {}),
+    };
+
+    const [total, rows] = await Promise.all([
+      this.prisma.progressReport.count({ where }),
+      this.prisma.progressReport.findMany({
+        where,
+        include: {
+          ...REPORT_INCLUDE,
+          template: { select: { id: true, name: true } },
+        },
+        orderBy: [{ periodStart: 'desc' }, { updatedAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    const items = rows.map(({ template, ...report }) => ({
+      ...report,
+      templateName: template.name,
+    }));
+
+    return { items, page, pageSize, total };
+  }
+
   async get(id: string) {
     const report = await this.prisma.progressReport.findUnique({
       where: { id },
@@ -120,7 +157,7 @@ export class ProgressReportService {
     return report;
   }
 
-  /** P-04, P-06, P-07 */
+  /** P-04, P-06 — P-07 goal links are enforced on submit so drafts can be created first. */
   async create(studentId: string, input: CreateProgressReportDto) {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, deletedAt: null },
@@ -149,19 +186,6 @@ export class ProgressReportService {
       input.reportType,
       student.disabilityCategory,
     );
-
-    if (input.reportType === 'monthly_progress') {
-      const activeIep = await this.prisma.iepPlan.findFirst({
-        where: { studentId, status: 'active' },
-      });
-      if (activeIep && !input.goalLinks?.length) {
-        throw DomainException.withCode(
-          ErrorCode.GOAL_LINK_REQUIRED,
-          422,
-          'A monthly report must link at least one IEP goal when the student has an active IEP',
-        );
-      }
-    }
 
     return this.prisma.$transaction(async (tx) => {
       const report = await tx.progressReport.create({
@@ -219,7 +243,40 @@ export class ProgressReportService {
     });
   }
 
-  /** P-01/P-02: draft → submitted; only the original author may (re)submit. */
+  /** Permanently removes a draft report. Submitted/approved/published cannot be deleted. */
+  async deleteDraft(id: string) {
+    const report = await this.get(id);
+    if (report.status !== 'draft') {
+      throw DomainException.withCode(
+        ErrorCode.INVALID_REPORT_TRANSITION,
+        409,
+        'Only draft progress reports can be deleted',
+      );
+    }
+    await this.prisma.progressReport.delete({ where: { id } });
+    return { id, deleted: true };
+  }
+
+  /** P-07: monthly reports require ≥1 IEP goal link when the student has an active IEP. */
+  private async assertGoalLinksIfRequired(report: {
+    studentId: string;
+    reportType: ProgressReportType;
+    goalLinks?: unknown[];
+  }) {
+    if (report.reportType !== 'monthly_progress') return;
+    const activeIep = await this.prisma.iepPlan.findFirst({
+      where: { studentId: report.studentId, status: 'active' },
+    });
+    if (activeIep && !(report.goalLinks?.length ?? 0)) {
+      throw DomainException.withCode(
+        ErrorCode.GOAL_LINK_REQUIRED,
+        422,
+        'A monthly report must link at least one IEP goal when the student has an active IEP',
+      );
+    }
+  }
+
+  /** P-01/P-02/P-07: draft → submitted; only the original author may (re)submit. */
   async submit(id: string, actorId: string) {
     const report = await this.get(id);
     if (report.status !== 'draft') {
@@ -234,6 +291,7 @@ export class ProgressReportService {
         'Only the authoring teacher may submit this report',
       );
     }
+    await this.assertGoalLinksIfRequired(report);
 
     const updated = await this.prisma.progressReport.update({
       where: { id },
@@ -254,8 +312,8 @@ export class ProgressReportService {
     return updated;
   }
 
-  /** P-01/P-02: submitted → approved; a teacher may never approve their own report. */
-  async approve(id: string, actorId: string) {
+  /** P-01/P-02: submitted → approved; teachers may never approve their own report. */
+  async approve(id: string, actorId: string, actorRoles: string[] = []) {
     const report = await this.get(id);
     if (report.status !== 'submitted') {
       throw DomainException.withCode(
@@ -264,7 +322,10 @@ export class ProgressReportService {
         `Cannot approve a report in status ${report.status}`,
       );
     }
-    if (report.submittedBy === actorId) {
+    const isElevatedReviewer = actorRoles.some((role) =>
+      ['coordinator', 'principal', 'super_admin'].includes(role),
+    );
+    if (report.submittedBy === actorId && !isElevatedReviewer) {
       throw DomainException.forbidden(
         'A teacher cannot approve their own report',
       );

@@ -402,6 +402,12 @@ export class SchoolAttendanceService {
       records.map((r) => [toDateKey(r.attendanceDate), r]),
     );
 
+    let presentDays = 0;
+    let absentDays = 0;
+    let lateDays = 0;
+    let halfDays = 0;
+    let excusedDays = 0;
+    let medicalDays = 0;
     let presentEquivalent = 0;
     let excludedCount = 0;
     let markedWorkingDays = 0;
@@ -412,18 +418,30 @@ export class SchoolAttendanceService {
       markedWorkingDays += 1;
       switch (record.status) {
         case 'present':
+          presentDays += 1;
+          presentEquivalent += 1;
+          break;
         case 'late':
+          lateDays += 1;
           presentEquivalent += 1;
           break;
         case 'half_day':
+          halfDays += 1;
           presentEquivalent += 0.5;
           break;
         case 'excused_leave':
+          excusedDays += 1;
+          excludedCount += 1;
+          markedWorkingDays -= 1;
+          break;
         case 'medical':
+          medicalDays += 1;
           excludedCount += 1;
           markedWorkingDays -= 1;
           break;
         case 'absent':
+          absentDays += 1;
+          break;
         default:
           break;
       }
@@ -437,6 +455,12 @@ export class SchoolAttendanceService {
       studentId,
       year,
       month,
+      presentDays,
+      absentDays,
+      lateDays,
+      halfDays,
+      excusedDays,
+      medicalDays,
       workingDays: workingDates.length,
       countedDays: denominator,
       excludedDays: excludedCount,

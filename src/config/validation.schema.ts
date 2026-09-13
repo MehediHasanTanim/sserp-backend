@@ -22,11 +22,24 @@ export const envSchema = z.object({
   BCRYPT_COST: z.coerce.number().int().min(10).max(15).default(12),
   LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().default(5),
   LOCKOUT_DURATION_MINUTES: z.coerce.number().int().default(15),
-  MINIO_ENDPOINT: z.string().min(1),
-  MINIO_PORT: z.coerce.number().default(9000),
-  MINIO_ACCESS_KEY: z.string().min(1),
-  MINIO_SECRET_KEY: z.string().min(1),
+  // Cloudflare R2 (preferred). Single bucket; logical folders via object key prefix.
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ENDPOINT: z.string().optional(), // override host (tests / custom)
+  R2_PORT: z.coerce.number().optional(),
+  R2_USE_SSL: boolish,
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET_NAME: z.string().optional(),
+  R2_PUBLIC_URL: z.string().optional().default(''),
+  R2_REGION: z.string().optional().default('auto'),
+  R2_PATH_STYLE: boolish,
+  // Legacy MinIO (CI / local --profile minio)
+  MINIO_ENDPOINT: z.string().optional(),
+  MINIO_PORT: z.coerce.number().optional(),
+  MINIO_ACCESS_KEY: z.string().optional(),
+  MINIO_SECRET_KEY: z.string().optional(),
   MINIO_USE_SSL: boolish,
+  MINIO_REGION: z.string().optional(),
   PRESIGN_TTL_SECONDS: z.coerce.number().default(900),
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().default(1025),
@@ -62,5 +75,18 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
       .join('; ');
     throw new Error(`Invalid environment configuration: ${msg}`);
   }
-  return parsed.data;
+  const data = parsed.data;
+  const hasR2 =
+    !!(data.R2_ACCOUNT_ID || data.R2_ENDPOINT) &&
+    !!data.R2_ACCESS_KEY_ID &&
+    !!data.R2_SECRET_ACCESS_KEY &&
+    !!data.R2_BUCKET_NAME;
+  const hasMinio =
+    !!data.MINIO_ENDPOINT && !!data.MINIO_ACCESS_KEY && !!data.MINIO_SECRET_KEY;
+  if (!hasR2 && !hasMinio) {
+    throw new Error(
+      'Invalid environment configuration: set Cloudflare R2_* (R2_ACCOUNT_ID or R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) or legacy MINIO_*',
+    );
+  }
+  return data;
 }

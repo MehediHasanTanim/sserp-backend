@@ -11,7 +11,7 @@ import {
 export class CreateSkillDomainDto {
   @IsString() @MinLength(1) name!: string;
   @IsOptional() @IsString() description?: string;
-  @IsInt() @Min(0) sequence!: number;
+  @IsOptional() @IsInt() @Min(0) sequence?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
@@ -39,7 +39,7 @@ export class UpdateCurriculumDto {
 export class CreateLearningObjectiveDto {
   @IsUUID() skillDomainId!: string;
   @IsString() @MinLength(1) description!: string;
-  @IsInt() @Min(0) sequence!: number;
+  @IsOptional() @IsInt() @Min(0) sequence?: number;
 }
 
 export class UpdateLearningObjectiveDto {

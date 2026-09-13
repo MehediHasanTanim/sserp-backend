@@ -26,7 +26,7 @@ export class StudentGuardianController {
   }
 
   @Post()
-  @Roles('coordinator', 'receptionist')
+  @Roles('coordinator', 'receptionist', 'super_admin', 'principal')
   @Permissions('school:create')
   @Audit({ module: 'school', entity: 'student_guardian', action: 'create' })
   create(
@@ -37,7 +37,7 @@ export class StudentGuardianController {
   }
 
   @Patch(':guardianId')
-  @Roles('coordinator', 'receptionist')
+  @Roles('coordinator', 'receptionist', 'super_admin', 'principal')
   @Permissions('school:update')
   @Audit({ module: 'school', entity: 'student_guardian', action: 'update' })
   update(
@@ -49,7 +49,7 @@ export class StudentGuardianController {
   }
 
   @Delete(':guardianId')
-  @Roles('coordinator', 'receptionist')
+  @Roles('coordinator', 'receptionist', 'super_admin', 'principal')
   @Permissions('school:delete')
   @Audit({ module: 'school', entity: 'student_guardian', action: 'delete' })
   remove(

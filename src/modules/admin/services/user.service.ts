@@ -214,7 +214,9 @@ export class RoleService {
 
   async list() {
     const roles = await this.prisma.role.findMany({
-      include: { _count: { select: { permissions: true } } },
+      include: {
+        _count: { select: { permissions: true, users: true } },
+      },
       orderBy: { name: 'asc' },
     });
     return roles.map((r) => ({
@@ -223,15 +225,34 @@ export class RoleService {
       description: r.description,
       isSystem: r.isSystem,
       permissionCount: r._count.permissions,
+      userCount: r._count.users,
     }));
   }
 
-  async getPermissions(id: string) {
+  async get(id: string) {
     const role = await this.prisma.role.findUnique({
       where: { id },
-      include: { permissions: true },
+      include: {
+        permissions: true,
+        _count: { select: { users: true } },
+      },
     });
     if (!role) throw DomainException.notFound('Role not found');
+    return {
+      id: role.id,
+      name: role.name,
+      description: role.description,
+      isSystem: role.isSystem,
+      userCount: role._count.users,
+      permissions: role.permissions.map((p) => ({
+        module: p.module,
+        action: p.action,
+      })),
+    };
+  }
+
+  async getPermissions(id: string) {
+    const role = await this.get(id);
     return {
       id: role.id,
       name: role.name,
@@ -239,22 +260,145 @@ export class RoleService {
     };
   }
 
+  private normalizeRoleName(name: string): string {
+    const normalized = name.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (!/^[a-z][a-z0-9_]{1,63}$/.test(normalized)) {
+      throw DomainException.validation(
+        'Role name must start with a letter and contain only lowercase letters, digits, and underscores',
+      );
+    }
+    return normalized;
+  }
+
+  async create(input: {
+    name: string;
+    description?: string;
+    permissions?: Array<{
+      module: PermissionModule;
+      action: PermissionAction;
+    }>;
+  }) {
+    const name = this.normalizeRoleName(input.name);
+    const clash = await this.prisma.role.findUnique({ where: { name } });
+    if (clash) {
+      throw DomainException.conflict(`Role name "${name}" is already in use`);
+    }
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const role = await tx.role.create({
+        data: {
+          name,
+          description: input.description?.trim() || null,
+          isSystem: false,
+        },
+      });
+      if (input.permissions?.length) {
+        await tx.rolePermission.createMany({
+          data: input.permissions.map((p) => ({
+            roleId: role.id,
+            module: p.module,
+            action: p.action,
+          })),
+        });
+      }
+      return role;
+    });
+
+    return this.get(created.id);
+  }
+
+  async update(
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      permissions?: Array<{
+        module: PermissionModule;
+        action: PermissionAction;
+      }>;
+    },
+  ) {
+    const existing = await this.prisma.role.findUnique({ where: { id } });
+    if (!existing) throw DomainException.notFound('Role not found');
+
+    if (
+      input.name === undefined &&
+      input.description === undefined &&
+      input.permissions === undefined
+    ) {
+      throw DomainException.validation(
+        'Provide at least one of name, description, or permissions',
+      );
+    }
+
+    let nextName: string | undefined;
+    if (input.name !== undefined) {
+      nextName = this.normalizeRoleName(input.name);
+      if (nextName !== existing.name) {
+        const clash = await this.prisma.role.findUnique({
+          where: { name: nextName },
+        });
+        if (clash) {
+          throw DomainException.conflict(
+            `Role name "${nextName}" is already in use`,
+          );
+        }
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.role.update({
+        where: { id },
+        data: {
+          ...(nextName !== undefined ? { name: nextName } : {}),
+          ...(input.description !== undefined
+            ? { description: input.description }
+            : {}),
+        },
+      });
+
+      if (input.permissions !== undefined) {
+        await tx.rolePermission.deleteMany({ where: { roleId: id } });
+        if (input.permissions.length) {
+          await tx.rolePermission.createMany({
+            data: input.permissions.map((p) => ({
+              roleId: id,
+              module: p.module,
+              action: p.action,
+            })),
+          });
+        }
+      }
+    });
+
+    return this.get(id);
+  }
+
+  async remove(id: string) {
+    const role = await this.prisma.role.findUnique({
+      where: { id },
+      include: { _count: { select: { users: true } } },
+    });
+    if (!role) throw DomainException.notFound('Role not found');
+    if (role._count.users > 0) {
+      throw DomainException.conflict(
+        `Cannot delete role "${role.name}" while assigned to ${role._count.users} user(s)`,
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.rolePermission.deleteMany({ where: { roleId: id } }),
+      this.prisma.role.delete({ where: { id } }),
+    ]);
+
+    return { deleted: true, id, name: role.name };
+  }
+
   async replacePermissions(
     id: string,
     permissions: Array<{ module: PermissionModule; action: PermissionAction }>,
   ) {
-    const role = await this.prisma.role.findUnique({ where: { id } });
-    if (!role) throw DomainException.notFound('Role not found');
-    await this.prisma.$transaction([
-      this.prisma.rolePermission.deleteMany({ where: { roleId: id } }),
-      this.prisma.rolePermission.createMany({
-        data: permissions.map((p) => ({
-          roleId: id,
-          module: p.module,
-          action: p.action,
-        })),
-      }),
-    ]);
+    await this.update(id, { permissions });
     return this.getPermissions(id);
   }
 }

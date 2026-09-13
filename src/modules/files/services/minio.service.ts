@@ -8,8 +8,45 @@ import {
 } from '../../../shared/errors/domain-exception';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 
-const BUCKET_POLICIES: Record<
-  string,
+/** Logical folders inside the single R2/S3 bucket (API still calls these `bucket`). */
+export const STORAGE_FOLDERS = [
+  'student-documents',
+  'iep-documents',
+  'progress-reports',
+  'therapy-attachments',
+  'hr-documents',
+  'invoices-receipts',
+  'activity-media',
+  'leave-documents',
+  'exports',
+] as const;
+
+export type StorageFolder = (typeof STORAGE_FOLDERS)[number];
+
+/** Module read permissions that may download objects in a logical folder. */
+const FOLDER_READ_PERMISSIONS: Record<StorageFolder, string[]> = {
+  'student-documents': ['school:read'],
+  'iep-documents': ['school:read'],
+  'progress-reports': ['school:read'],
+  'therapy-attachments': ['therapy:read'],
+  'hr-documents': ['hr:read'],
+  'invoices-receipts': ['accounts:read', 'school:read'],
+  'activity-media': ['school:read'],
+  'leave-documents': ['hr:read'],
+  exports: ['hr:read', 'school:read', 'accounts:read', 'admin:read'],
+};
+
+function canReadStorageFolder(
+  folder: string,
+  permissions: string[],
+): boolean {
+  const allowed = FOLDER_READ_PERMISSIONS[folder as StorageFolder];
+  if (!allowed) return false;
+  return allowed.some((p) => permissions.includes(p));
+}
+
+const FOLDER_POLICIES: Record<
+  StorageFolder,
   { maxBytes: number; mimeAllow: string[] }
 > = {
   'student-documents': {
@@ -30,7 +67,13 @@ const BUCKET_POLICIES: Record<
   },
   'hr-documents': {
     maxBytes: 50 * 1024 * 1024,
-    mimeAllow: ['application/pdf', 'image/jpeg', 'image/png'],
+    mimeAllow: [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
   },
   'invoices-receipts': {
     maxBytes: 20 * 1024 * 1024,
@@ -58,32 +101,58 @@ const BUCKET_POLICIES: Record<
 export class MinioService {
   private readonly client: Minio.Client;
   private readonly ttl: number;
+  private readonly bucketName: string;
+  private readonly publicUrlBase: string;
 
   constructor(private readonly config: ConfigService) {
+    const useSSL = config.get<boolean>('storage.useSSL') ?? true;
+    const port = config.get<number>('storage.port') ?? (useSSL ? 443 : 9000);
     this.client = new Minio.Client({
-      endPoint: config.get<string>('minio.endpoint')!,
-      port: config.get<number>('minio.port'),
-      useSSL: config.get<boolean>('minio.useSSL'),
-      accessKey: config.get<string>('minio.accessKey')!,
-      secretKey: config.get<string>('minio.secretKey')!,
+      endPoint: config.get<string>('storage.endpoint')!,
+      port,
+      useSSL,
+      accessKey: config.get<string>('storage.accessKey')!,
+      secretKey: config.get<string>('storage.secretKey')!,
+      region: config.get<string>('storage.region') ?? 'auto',
+      pathStyle: config.get<boolean>('storage.pathStyle') ?? true,
     });
-    this.ttl = config.get<number>('minio.presignTtlSeconds') ?? 900;
+    this.ttl = config.get<number>('storage.presignTtlSeconds') ?? 900;
+    this.bucketName = config.get<string>('storage.bucketName')!;
+    this.publicUrlBase = (
+      config.get<string>('storage.publicUrl') ?? ''
+    ).replace(/\/$/, '');
+  }
+
+  /** Physical R2/S3 bucket (e.g. sserp). */
+  get physicalBucket() {
+    return this.bucketName;
   }
 
   get raw() {
     return this.client;
   }
 
-  assertBucketPolicy(bucket: string, mimeType: string, sizeBytes: number) {
-    const policy = BUCKET_POLICIES[bucket];
+  async ping(): Promise<void> {
+    const exists = await this.client.bucketExists(this.bucketName);
+    if (!exists) {
+      throw new Error(
+        `Object storage bucket "${this.bucketName}" does not exist`,
+      );
+    }
+  }
+
+  assertFolderPolicy(folder: string, mimeType: string, sizeBytes: number) {
+    const policy = FOLDER_POLICIES[folder as StorageFolder];
     if (!policy) {
-      throw DomainException.validation(`Unknown bucket: ${bucket}`);
+      throw DomainException.validation(
+        `Unknown storage folder: ${folder}. Allowed: ${STORAGE_FOLDERS.join(', ')}`,
+      );
     }
     if (!policy.mimeAllow.includes(mimeType)) {
       throw new DomainException(
         ErrorCode.UNSUPPORTED_MEDIA_TYPE,
         415,
-        `MIME type ${mimeType} not allowed for ${bucket}`,
+        `MIME type ${mimeType} not allowed for ${folder}`,
       );
     }
     if (sizeBytes > policy.maxBytes) {
@@ -95,32 +164,127 @@ export class MinioService {
     }
   }
 
-  async presignUpload(bucket: string, mimeType: string, sizeBytes: number) {
-    this.assertBucketPolicy(bucket, mimeType, sizeBytes);
-    const objectKey = `${new Date().toISOString().slice(0, 10)}/${randomUUID()}`;
+  /** Resolve object key so logical folder is always the first path segment. */
+  resolveObjectKey(folder: string, objectKey: string): string {
+    const key = objectKey.replace(/^\/+/, '');
+    if (key === folder || key.startsWith(`${folder}/`)) return key;
+    return `${folder}/${key}`;
+  }
+
+  /**
+   * Cloudflare R2 "folders" are object-key prefixes, not real directories.
+   * Some clients still expect a `${folder}/` placeholder object to exist.
+   *
+   * This creates a zero-byte object at `${folder}/` if it doesn't already exist.
+   */
+  private async ensureFolderPrefix(folder: string): Promise<void> {
+    const prefixKey = `${folder}/`;
+    try {
+      // If any object exists under `${folder}/...`, this stat may still fail;
+      // but creating the placeholder is harmless and helps clients that require it.
+      await this.client.statObject(this.bucketName, prefixKey);
+    } catch {
+      await this.client.putObject(
+        this.bucketName,
+        prefixKey,
+        Buffer.alloc(0),
+        0,
+        { 'Content-Type': 'application/x-directory' },
+      );
+    }
+  }
+
+  async putObject(
+    folder: string,
+    relativeKey: string,
+    buffer: Buffer,
+    size: number,
+    meta: Record<string, string>,
+  ) {
+    this.assertFolderPolicy(
+      folder,
+      meta['Content-Type'] ?? 'application/octet-stream',
+      size,
+    );
+    await this.ensureFolderPrefix(folder);
+    const objectKey = this.resolveObjectKey(folder, relativeKey);
+    await this.client.putObject(
+      this.bucketName,
+      objectKey,
+      buffer,
+      size,
+      meta,
+    );
+    return objectKey;
+  }
+
+  async presignUpload(folder: string, mimeType: string, sizeBytes: number) {
+    this.assertFolderPolicy(folder, mimeType, sizeBytes);
+    await this.ensureFolderPrefix(folder);
+    const objectKey = `${folder}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}`;
     const url = await this.client.presignedPutObject(
-      bucket,
+      this.bucketName,
       objectKey,
       this.ttl,
     );
-    return { url, bucket, objectKey, expiresInSeconds: this.ttl };
+    return {
+      url,
+      /** Logical folder (API contract). */
+      bucket: folder,
+      objectKey,
+      expiresInSeconds: this.ttl,
+    };
   }
 
-  async objectExists(bucket: string, objectKey: string): Promise<boolean> {
+  /** Server-side upload (avoids browser CORS to R2/MinIO). */
+  async uploadBuffer(
+    folder: string,
+    buffer: Buffer,
+    sizeBytes: number,
+    mimeType: string,
+  ) {
+    this.assertFolderPolicy(folder, mimeType, sizeBytes);
+    await this.ensureFolderPrefix(folder);
+    const objectKey = `${folder}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}`;
+    await this.client.putObject(this.bucketName, objectKey, buffer, sizeBytes, {
+      'Content-Type': mimeType,
+    });
+    return {
+      bucket: folder,
+      objectKey,
+    };
+  }
+
+  async objectExists(folder: string, objectKey: string): Promise<boolean> {
     try {
-      await this.client.statObject(bucket, objectKey);
+      await this.client.statObject(
+        this.bucketName,
+        this.resolveObjectKey(folder, objectKey),
+      );
       return true;
     } catch {
       return false;
     }
   }
 
-  async presignDownload(bucket: string, objectKey: string) {
-    return this.client.presignedGetObject(bucket, objectKey, this.ttl);
+  async presignDownload(folder: string, objectKey: string) {
+    const key = this.resolveObjectKey(folder, objectKey);
+    if (this.publicUrlBase) {
+      return `${this.publicUrlBase}/${key}`;
+    }
+    return this.client.presignedGetObject(this.bucketName, key, this.ttl);
   }
 
-  async removeObject(bucket: string, objectKey: string) {
-    await this.client.removeObject(bucket, objectKey);
+  async removeObject(folder: string, objectKey: string) {
+    await this.client.removeObject(
+      this.bucketName,
+      this.resolveObjectKey(folder, objectKey),
+    );
+  }
+
+  /** @deprecated Prefer putObject / resolveObjectKey — kept for rare raw access. */
+  assertBucketPolicy(bucket: string, mimeType: string, sizeBytes: number) {
+    this.assertFolderPolicy(bucket, mimeType, sizeBytes);
   }
 }
 
@@ -141,11 +305,15 @@ export class AttachmentService {
     entityId?: string;
     uploadedBy: string;
   }) {
-    const exists = await this.minio.objectExists(input.bucket, input.objectKey);
+    const objectKey = this.minio.resolveObjectKey(
+      input.bucket,
+      input.objectKey,
+    );
+    const exists = await this.minio.objectExists(input.bucket, objectKey);
     if (!exists) {
       throw DomainException.unprocessable('Object not found in storage');
     }
-    this.minio.assertBucketPolicy(
+    this.minio.assertFolderPolicy(
       input.bucket,
       input.mimeType,
       input.sizeBytes,
@@ -153,7 +321,7 @@ export class AttachmentService {
     return this.prisma.attachment.create({
       data: {
         bucket: input.bucket,
-        objectKey: input.objectKey,
+        objectKey,
         originalFilename: input.originalFilename,
         mimeType: input.mimeType,
         sizeBytes: input.sizeBytes,
@@ -168,16 +336,21 @@ export class AttachmentService {
   async downloadUrl(
     attachmentId: string,
     requesterId: string,
-    isSuperAdmin: boolean,
+    options: { isSuperAdmin: boolean; permissions: string[] },
   ) {
     const att = await this.prisma.attachment.findFirst({
       where: { id: attachmentId, deletedAt: null, status: 'confirmed' },
     });
     if (!att) throw DomainException.notFound('Attachment not found');
-    if (!isSuperAdmin && att.uploadedBy !== requesterId) {
-      // Phase 0: owner or super_admin; later phases add entity-scope checks
+
+    const canDownload =
+      options.isSuperAdmin ||
+      att.uploadedBy === requesterId ||
+      canReadStorageFolder(att.bucket, options.permissions);
+    if (!canDownload) {
       throw DomainException.forbidden('Not allowed to download this file');
     }
+
     const url = await this.minio.presignDownload(att.bucket, att.objectKey);
     return { url, expiresInSeconds: 900, filename: att.originalFilename };
   }
@@ -198,7 +371,6 @@ export class AttachmentService {
       where: { id: attachmentId },
       data: { deletedAt: new Date(), status: 'orphaned' },
     });
-    // schedule deletion — immediate for Phase 0 simplicity
     await this.minio
       .removeObject(att.bucket, att.objectKey)
       .catch(() => undefined);

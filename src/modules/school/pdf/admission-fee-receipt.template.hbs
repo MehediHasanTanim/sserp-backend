@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Admission Fee Receipt {{receipt.number}}</title>
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #1a1a1a; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    .box { border: 1px solid #ccc; padding: 12px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Admission Fee Receipt {{receipt.number}}</h1>
+  <div class="box">
+    Student: {{student.fullName}} ({{student.studentCode}})<br />
+    Shift: {{student.shiftName}}<br />
+    Amount: {{receipt.amount}}<br />
+    Method: {{receipt.paymentMethod}}<br />
+    Reference: {{receipt.paymentReference}}<br />
+    Paid date: {{receipt.paidDate}}<br />
+    Status: {{receipt.status}}
+  </div>
+</body>
+</html>

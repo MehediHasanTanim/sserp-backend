@@ -6,6 +6,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { faker } from '@faker-js/faker';
+import { resolveOrgIds } from '../prisma/seed/hr-org.seed';
 
 faker.seed(18112);
 
@@ -37,13 +38,18 @@ async function main() {
 
   for (let i = 1; i <= 5; i++) {
     const code = `E2E-${RUN_ID}-EMP-${String(i).padStart(2, '0')}`;
+    const { departmentId, designationId } = await resolveOrgIds(
+      prisma,
+      'school',
+      'Teacher',
+    );
     await prisma.employee.upsert({
       where: { employeeCode: code },
       create: {
         employeeCode: code,
         fullName: `E2E-${RUN_ID}-${faker.person.fullName()}`,
-        department: 'school',
-        designation: 'Teacher',
+        departmentId,
+        designationId,
         employmentType: 'permanent',
         joiningDate: new Date('2022-01-01'),
         basicSalary: 50_000_00,

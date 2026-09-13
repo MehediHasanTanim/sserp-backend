@@ -116,7 +116,7 @@ export async function seedPhase2(prisma: PrismaClient) {
     update: { isActive: true },
   });
 
-  await prisma.feeHead.upsert({
+  const tuitionHead = await prisma.feeHead.upsert({
     where: { code: 'TUITION' },
     create: {
       code: 'TUITION',
@@ -128,7 +128,55 @@ export async function seedPhase2(prisma: PrismaClient) {
     update: { isActive: true },
   });
 
+  const academicYear =
+    (await prisma.academicYear.findFirst({ where: { isCurrent: true } })) ??
+    (await prisma.academicYear.findFirst({ orderBy: { startDate: 'desc' } }));
+
+  if (academicYear) {
+    const existingStructure = await prisma.feeStructure.findFirst({
+      where: {
+        academicYearId: academicYear.id,
+        feeCategoryId: feeCategory.id,
+        feeHeadId: tuitionHead.id,
+        frequency: 'monthly',
+      },
+    });
+    if (!existingStructure) {
+      await prisma.feeStructure.create({
+        data: {
+          academicYearId: academicYear.id,
+          feeCategoryId: feeCategory.id,
+          feeHeadId: tuitionHead.id,
+          amount: 500000,
+          frequency: 'monthly',
+          effectiveFrom: academicYear.startDate,
+        },
+      });
+    }
+  }
+
+  // Assign Standard category to active students that have no open assignment.
+  const activeStudents = await prisma.student.findMany({
+    where: { deletedAt: null, status: 'active' },
+    select: { id: true },
+  });
+  let assigned = 0;
+  for (const student of activeStudents) {
+    const open = await prisma.studentFeeAssignment.findFirst({
+      where: { studentId: student.id, effectiveTo: null },
+    });
+    if (open) continue;
+    await prisma.studentFeeAssignment.create({
+      data: {
+        studentId: student.id,
+        feeCategoryId: feeCategory.id,
+        effectiveFrom: new Date('2020-01-01T00:00:00.000Z'),
+      },
+    });
+    assigned += 1;
+  }
+
   console.log(
-    `Phase 2 (School Advanced) seed complete (fee category: ${feeCategory.name})`,
+    `Phase 2 (School Advanced) seed complete (fee category: ${feeCategory.name}, assigned: ${assigned})`,
   );
 }

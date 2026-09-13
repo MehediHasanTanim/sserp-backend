@@ -4,6 +4,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { faker } from '@faker-js/faker';
+import { resolveOrgIds } from '../prisma/seed/hr-org.seed';
 
 faker.seed(9001);
 
@@ -46,12 +47,22 @@ async function main() {
   });
   for (let i = existingEmployees + 1; i <= EMPLOYEE_TARGET; i++) {
     const code = `VOL-EMP-${String(i).padStart(4, '0')}`;
+    const deptCode = faker.helpers.arrayElement([
+      'school',
+      'therapy',
+      'administration',
+    ]);
+    const { departmentId, designationId } = await resolveOrgIds(
+      prisma,
+      deptCode,
+      'Staff',
+    );
     await prisma.employee.create({
       data: {
         employeeCode: code,
         fullName: faker.person.fullName(),
-        department: faker.helpers.arrayElement(['school', 'therapy', 'administration']),
-        designation: 'Staff',
+        departmentId,
+        designationId,
         employmentType: 'permanent',
         joiningDate: new Date('2020-01-01'),
         basicSalary: 35_000_00 + i * 10_000,

@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import {
   startTestApp,
   TestContext,
-} from '../../src/shared/testing/container.harness';
+} from '../../../src/shared/testing/container.harness';
 
 /**
  * Shared bootstrap for pilot suites that opt into Testcontainers.

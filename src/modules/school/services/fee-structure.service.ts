@@ -4,6 +4,7 @@ import { DomainException } from '../../../shared/errors/domain-exception';
 import {
   CreateDiscountDto,
   CreateFeeCategoryDto,
+  CreateFeeDiscountRequestDto,
   CreateFeeHeadDto,
   CreateFeeStructureDto,
   CreateScholarshipDto,
@@ -143,6 +144,26 @@ export class FeeStructureService {
     });
   }
 
+  /** Current assignment for staff UI; null when none is set. */
+  async getStudentFeeCategory(studentId: string) {
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, deletedAt: null },
+    });
+    if (!student) throw DomainException.notFound('Student not found');
+
+    const assignment = await this.currentFeeCategory(studentId, new Date());
+    if (!assignment) return null;
+
+    return {
+      id: assignment.id,
+      studentId: assignment.studentId,
+      feeCategoryId: assignment.feeCategoryId,
+      feeCategoryName: assignment.feeCategory.name,
+      effectiveFrom: assignment.effectiveFrom,
+      effectiveTo: assignment.effectiveTo,
+    };
+  }
+
   async setStudentFeeCategory(
     studentId: string,
     input: SetStudentFeeCategoryDto,
@@ -152,8 +173,15 @@ export class FeeStructureService {
     });
     if (!student) throw DomainException.notFound('Student not found');
 
+    const category = await this.prisma.feeCategory.findUnique({
+      where: { id: input.feeCategoryId },
+    });
+    if (!category || !category.isActive) {
+      throw DomainException.notFound('Fee category not found');
+    }
+
     const effectiveFrom = new Date(input.effectiveFrom);
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const previousDay = new Date(effectiveFrom);
       previousDay.setUTCDate(previousDay.getUTCDate() - 1);
       await tx.studentFeeAssignment.updateMany({
@@ -166,11 +194,59 @@ export class FeeStructureService {
           feeCategoryId: input.feeCategoryId,
           effectiveFrom,
         },
+        include: { feeCategory: true },
       });
     });
+
+    return {
+      id: created.id,
+      studentId: created.studentId,
+      feeCategoryId: created.feeCategoryId,
+      feeCategoryName: created.feeCategory.name,
+      effectiveFrom: created.effectiveFrom,
+      effectiveTo: created.effectiveTo,
+    };
   }
 
   // ---- Discounts ----
+
+  private toFeeDiscountView(
+    discount: {
+      id: string;
+      studentId: string;
+      discountType: string;
+      value: number;
+      reason: string | null;
+      status: string;
+      student?: { fullName: string } | null;
+    },
+  ) {
+    const percentage =
+      discount.discountType === 'percentage' ? discount.value : null;
+    const fixedAmount =
+      discount.discountType === 'fixed' ? discount.value : null;
+    return {
+      id: discount.id,
+      studentId: discount.studentId,
+      studentName: discount.student?.fullName,
+      percentage,
+      fixedAmount,
+      reason: discount.reason ?? '',
+      status: discount.status as 'pending' | 'approved' | 'rejected',
+      financialImpact: fixedAmount,
+    };
+  }
+
+  async listFeeDiscounts(status?: string) {
+    const discounts = await this.prisma.studentDiscount.findMany({
+      where: status
+        ? { status: status as 'pending' | 'approved' | 'rejected' }
+        : undefined,
+      include: { student: { select: { fullName: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return discounts.map((d) => this.toFeeDiscountView(d));
+  }
 
   async listDiscounts(studentId: string) {
     return this.prisma.studentDiscount.findMany({
@@ -208,6 +284,49 @@ export class FeeStructureService {
     });
   }
 
+  async createFeeDiscountRequest(input: CreateFeeDiscountRequestDto) {
+    const hasPercentage =
+      input.percentage != null && !Number.isNaN(Number(input.percentage));
+    const hasFixed =
+      input.fixedAmount != null && !Number.isNaN(Number(input.fixedAmount));
+
+    if (hasPercentage === hasFixed) {
+      throw DomainException.validation(
+        'Provide exactly one of percentage or fixedAmount',
+      );
+    }
+
+    const discountType = hasPercentage ? 'percentage' : 'fixed';
+    const value = hasPercentage
+      ? Math.round(Number(input.percentage))
+      : Math.round(Number(input.fixedAmount));
+
+    if (discountType === 'percentage' && (value < 0 || value > 100)) {
+      throw DomainException.validation('percentage must be between 0 and 100');
+    }
+    if (discountType === 'fixed' && value <= 0) {
+      throw DomainException.validation('fixedAmount must be greater than zero');
+    }
+
+    const created = await this.createDiscount(input.studentId, {
+      discountType,
+      value,
+      reason: input.reason,
+      // Apply from the start of the current month so it covers this period's invoice.
+      effectiveFrom: new Date(
+        Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+      )
+        .toISOString()
+        .slice(0, 10),
+    });
+
+    const withStudent = await this.prisma.studentDiscount.findUnique({
+      where: { id: created.id },
+      include: { student: { select: { fullName: true } } },
+    });
+    return this.toFeeDiscountView(withStudent!);
+  }
+
   async approveDiscount(id: string, actorId: string, actorRoles: string[]) {
     if (!actorRoles.some((r) => PRINCIPAL_ROLES.includes(r))) {
       throw DomainException.forbidden(
@@ -224,12 +343,26 @@ export class FeeStructureService {
     });
   }
 
+  async approveFeeDiscount(id: string, actorId: string, actorRoles: string[]) {
+    const updated = await this.approveDiscount(id, actorId, actorRoles);
+    const withStudent = await this.prisma.studentDiscount.findUnique({
+      where: { id: updated.id },
+      include: { student: { select: { fullName: true } } },
+    });
+    return this.toFeeDiscountView(withStudent!);
+  }
+
   async approvedDiscountsFor(studentId: string, onDate: Date) {
+    // onDate is typically the billing period start (1st). A discount approved
+    // mid-month should still apply to that month's invoice.
+    const periodEnd = new Date(
+      Date.UTC(onDate.getUTCFullYear(), onDate.getUTCMonth() + 1, 0),
+    );
     return this.prisma.studentDiscount.findMany({
       where: {
         studentId,
         status: 'approved',
-        effectiveFrom: { lte: onDate },
+        effectiveFrom: { lte: periodEnd },
         OR: [{ effectiveTo: null }, { effectiveTo: { gte: onDate } }],
       },
     });

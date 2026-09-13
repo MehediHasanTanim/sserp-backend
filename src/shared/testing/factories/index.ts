@@ -124,20 +124,300 @@ export const therapistFactory = Factory.define<{
   status: sequence % 2 === 0 ? 'active' : 'active',
 }));
 
+export const skillDomainFactory = Factory.define<{
+  id: string;
+  name: string;
+  description: string | null;
+  sequence: number;
+  isActive: boolean;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  name: `Domain ${sequence}`,
+  description: faker.lorem.sentence(),
+  sequence,
+  isActive: true,
+}));
+
+export const iepPlanFactory = Factory.define<{
+  id: string;
+  studentId: string;
+  academicYearId: string;
+  version: number;
+  status: string;
+  reviewFrequencyMonths: number;
+  nextReviewDate: Date | null;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  studentId: faker.string.uuid(),
+  academicYearId: faker.string.uuid(),
+  version: sequence,
+  status: 'draft',
+  reviewFrequencyMonths: 3,
+  nextReviewDate: null,
+}));
+
+export const iepGoalFactory = Factory.define<{
+  id: string;
+  iepId: string;
+  skillDomainId: string;
+  description: string;
+  status: string;
+  progressPercentage: number;
+  sequence: number;
+  responsibleTeacherId: string | null;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  iepId: faker.string.uuid(),
+  skillDomainId: faker.string.uuid(),
+  description: faker.lorem.sentence(),
+  status: 'not_started',
+  progressPercentage: 0,
+  sequence,
+  responsibleTeacherId: faker.string.uuid(),
+}));
+
+export const iepReviewFactory = Factory.define<{
+  id: string;
+  iepId: string;
+  scheduledDate: Date;
+  reviewType: string;
+  status: string;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  iepId: faker.string.uuid(),
+  scheduledDate: new Date(`2026-${String(((sequence - 1) % 12) + 1).padStart(2, '0')}-15T00:00:00.000Z`),
+  reviewType: 'quarterly',
+  status: 'scheduled',
+}));
+
+export const reportTemplateFactory = Factory.define<{
+  id: string;
+  name: string;
+  reportType: string;
+  disabilityCategory: string | null;
+  sections: Record<string, unknown>;
+  isActive: boolean;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  name: `Template ${sequence}`,
+  reportType: 'monthly_progress',
+  disabilityCategory: null,
+  sections: { narrative: true },
+  isActive: true,
+}));
+
+export const progressReportFactory = Factory.define<{
+  id: string;
+  studentId: string;
+  templateId: string;
+  reportType: string;
+  periodStart: Date;
+  periodEnd: Date;
+  academicYearId: string;
+  status: string;
+}>(() => ({
+  id: faker.string.uuid(),
+  studentId: faker.string.uuid(),
+  templateId: faker.string.uuid(),
+  reportType: 'monthly_progress',
+  periodStart: new Date('2026-01-01T00:00:00.000Z'),
+  periodEnd: new Date('2026-01-31T00:00:00.000Z'),
+  academicYearId: faker.string.uuid(),
+  status: 'draft',
+}));
+
+export const feeHeadFactory = Factory.define<{
+  id: string;
+  code: string;
+  name: string;
+  headType: string;
+  isRecurring: boolean;
+  isActive: boolean;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  code: `HEAD-${String(sequence).padStart(3, '0')}`,
+  name: faker.commerce.productName(),
+  headType: faker.helpers.arrayElement(['tuition', 'transport', 'material', 'other']),
+  isRecurring: true,
+  isActive: true,
+}));
+
+export const feeStructureFactory = Factory.define<{
+  id: string;
+  academicYearId: string;
+  feeCategoryId: string;
+  feeHeadId: string;
+  amount: number;
+  frequency: string;
+  effectiveFrom: Date;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  academicYearId: faker.string.uuid(),
+  feeCategoryId: faker.string.uuid(),
+  feeHeadId: faker.string.uuid(),
+  amount: 5_000_00 + sequence * 100,
+  frequency: 'monthly',
+  effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+}));
+
 export const feeInvoiceFactory = Factory.define<{
   id: string;
   studentId: string;
   invoiceNumber: string;
+  academicYearId: string;
+  invoiceType: string;
   totalAmount: number;
+  netAmount: number;
   paidAmount: number;
+  outstandingAmount: number;
   status: string;
 }>(({ sequence }) => ({
   id: faker.string.uuid(),
   studentId: faker.string.uuid(),
   invoiceNumber: `INV-${String(sequence).padStart(6, '0')}`,
+  academicYearId: faker.string.uuid(),
+  invoiceType: 'monthly',
   totalAmount: 5_000_00,
+  netAmount: 5_000_00,
   paidAmount: 0,
-  status: 'open',
+  outstandingAmount: 5_000_00,
+  status: 'issued',
+}));
+
+export const feePaymentFactory = Factory.define<{
+  id: string;
+  receiptNumber: string;
+  invoiceId: string;
+  studentId: string;
+  amount: number;
+  method: string;
+  paymentDate: Date;
+  receivedBy: string;
+  status: string;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  receiptNumber: `RCP-${String(sequence).padStart(6, '0')}`,
+  invoiceId: faker.string.uuid(),
+  studentId: faker.string.uuid(),
+  amount: 1_000_00,
+  method: 'cash',
+  paymentDate: new Date('2026-02-01T00:00:00.000Z'),
+  receivedBy: faker.string.uuid(),
+  status: 'recorded',
+}));
+
+export const discountFactory = Factory.define<{
+  id: string;
+  studentId: string;
+  discountType: string;
+  value: number;
+  feeHeadId: string | null;
+  status: string;
+  effectiveFrom: Date;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  studentId: faker.string.uuid(),
+  discountType: sequence % 2 === 0 ? 'percentage' : 'fixed',
+  value: sequence % 2 === 0 ? 10 : 500_00,
+  feeHeadId: null,
+  status: 'pending',
+  effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+}));
+
+export const activityFactory = Factory.define<{
+  id: string;
+  activityTypeId: string;
+  name: string;
+  activityDate: Date;
+  capacity: number;
+  feeAmount: number;
+  optInDeadline: Date;
+  waitlistEnabled: boolean;
+  status: string;
+  participantCount: number;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  activityTypeId: faker.string.uuid(),
+  name: `Activity ${sequence}`,
+  activityDate: new Date('2026-03-15T00:00:00.000Z'),
+  capacity: 20,
+  feeAmount: 500_00,
+  optInDeadline: new Date('2026-03-10T00:00:00.000Z'),
+  waitlistEnabled: true,
+  status: 'upcoming',
+  participantCount: 0,
+}));
+
+export const activityEnrollmentFactory = Factory.define<{
+  id: string;
+  activityId: string;
+  studentId: string;
+  consentStatus: string;
+  enrollmentState: string;
+  waitlistPosition: number | null;
+  feeStatus: string;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  activityId: faker.string.uuid(),
+  studentId: faker.string.uuid(),
+  consentStatus: 'pending',
+  enrollmentState: 'waitlisted',
+  waitlistPosition: sequence,
+  feeStatus: 'pending',
+}));
+
+export const studentLeaveRequestFactory = Factory.define<{
+  id: string;
+  studentId: string;
+  requestedBy: string;
+  leaveType: string;
+  startDate: Date;
+  endDate: Date;
+  totalDays: number;
+  status: string;
+}>(() => ({
+  id: faker.string.uuid(),
+  studentId: faker.string.uuid(),
+  requestedBy: faker.string.uuid(),
+  leaveType: faker.helpers.arrayElement(['medical', 'family', 'other']),
+  startDate: new Date('2026-04-01T00:00:00.000Z'),
+  endDate: new Date('2026-04-03T00:00:00.000Z'),
+  totalDays: 3,
+  status: 'pending',
+}));
+
+export const medicalRecordFactory = Factory.define<{
+  id: string;
+  studentId: string;
+  bloodGroup: string | null;
+  hasAlertFlag: boolean;
+  alertSummary: string | null;
+  emergencyProtocol: string | null;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  studentId: faker.string.uuid(),
+  bloodGroup: faker.helpers.arrayElement(['A+', 'B+', 'O+', 'AB+', null]),
+  hasAlertFlag: sequence % 3 === 0,
+  alertSummary: sequence % 3 === 0 ? faker.lorem.sentence() : null,
+  emergencyProtocol: null,
+}));
+
+export const behavioralIncidentFactory = Factory.define<{
+  id: string;
+  studentId: string;
+  incidentDatetime: Date;
+  behaviorType: string;
+  description: string;
+  recordedBy: string;
+  linkedIepGoalId: string | null;
+}>(({ sequence }) => ({
+  id: faker.string.uuid(),
+  studentId: faker.string.uuid(),
+  incidentDatetime: new Date(`2026-05-${String(((sequence - 1) % 28) + 1).padStart(2, '0')}T10:00:00.000Z`),
+  behaviorType: faker.helpers.arrayElement(['aggression', 'elopement', 'self_injury']),
+  description: faker.lorem.sentence(),
+  recordedBy: faker.string.uuid(),
+  linkedIepGoalId: null,
 }));
 
 export const journalFactory = Factory.define<{

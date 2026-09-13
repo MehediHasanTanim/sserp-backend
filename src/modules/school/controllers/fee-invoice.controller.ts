@@ -9,6 +9,7 @@ import {
 } from '../../../shared/decorators';
 import { FeeInvoiceService } from '../services/fee-invoice.service';
 import { FeeReminderService } from '../services/fee-reminder.service';
+import { SchoolDocumentService } from '../services/school-document.service';
 import {
   CancelInvoiceDto,
   GenerateMonthlyInvoicesDto,
@@ -21,7 +22,18 @@ export class FeeInvoiceController {
   constructor(
     private readonly invoices: FeeInvoiceService,
     private readonly reminders: FeeReminderService,
+    private readonly documents: SchoolDocumentService,
   ) {}
+
+  @Get('fee-invoices/generate-monthly/preview')
+  @Roles('accountant', 'coordinator', 'super_admin')
+  @Permissions('school:read')
+  @ApiOperation({
+    summary: 'Dry-run preview of monthly invoice generation for a period',
+  })
+  previewMonthly(@Query('period') period: string) {
+    return this.invoices.previewMonthly(period);
+  }
 
   @Post('fee-invoices/generate-monthly')
   @Roles('accountant', 'super_admin')
@@ -51,8 +63,25 @@ export class FeeInvoiceController {
   list(
     @Query('studentId') studentId?: string,
     @Query('status') status?: string,
+    @Query('period') period?: string,
   ) {
-    return this.invoices.list({ studentId, status });
+    return this.invoices.list({ studentId, status, period });
+  }
+
+  @Get('fee-invoices/defaulters')
+  @Roles(
+    'accountant',
+    'coordinator',
+    'receptionist',
+    'principal',
+    'super_admin',
+  )
+  @Permissions('school:read')
+  @ApiOperation({
+    summary: 'Overdue invoices with outstanding balance, aged into buckets',
+  })
+  listDefaulters(@Query('agingBucket') agingBucket?: string) {
+    return this.invoices.listDefaulters(agingBucket);
   }
 
   @Get('fee-invoices/:id')
@@ -62,11 +91,24 @@ export class FeeInvoiceController {
     'receptionist',
     'principal',
     'super_admin',
-    'parent',
   )
   @Permissions('school:read')
   get(@Param('id') id: string) {
     return this.invoices.get(id);
+  }
+
+  @Get('fee-invoices/:id/document')
+  @Roles(
+    'accountant',
+    'coordinator',
+    'receptionist',
+    'principal',
+    'super_admin',
+  )
+  @Permissions('school:read')
+  @ApiOperation({ summary: 'Presigned URL for the rendered invoice PDF' })
+  document(@Param('id') id: string) {
+    return this.documents.invoiceDocument(id);
   }
 
   @Post('fee-invoices/:id/cancel')
@@ -84,7 +126,6 @@ export class FeeInvoiceController {
     'receptionist',
     'principal',
     'super_admin',
-    'parent',
   )
   @Permissions('school:read')
   feeSummary(@Param('id') studentId: string) {

@@ -31,7 +31,10 @@ export class CreateStudentDto {
   @IsOptional() @IsString() nationality?: string;
   @IsOptional() @IsString() religion?: string;
   @IsOptional() @IsString() disabilityCategory?: string;
+  /** Canonical field name used in Prisma / responses. */
   @IsOptional() @IsString() severityLevel?: string;
+  /** Frontend alias for severityLevel. */
+  @IsOptional() @IsString() disabilityLevel?: string;
   @IsOptional() @IsString() bloodGroup?: string;
   @IsOptional() @IsUUID() photoAttachmentId?: string;
   @IsOptional() @IsString() previousInstitution?: string;
@@ -53,7 +56,10 @@ export class UpdateStudentDto {
   @IsOptional() @IsString() nationality?: string;
   @IsOptional() @IsString() religion?: string;
   @IsOptional() @IsString() disabilityCategory?: string;
+  /** Canonical field name used in Prisma / responses. */
   @IsOptional() @IsString() severityLevel?: string;
+  /** Frontend alias for severityLevel. */
+  @IsOptional() @IsString() disabilityLevel?: string;
   @IsOptional() @IsString() bloodGroup?: string;
   @IsOptional() @IsUUID() photoAttachmentId?: string;
   @IsOptional() @IsString() previousInstitution?: string;

@@ -24,7 +24,7 @@ export class IepReviewController {
   }
 
   @Post(':id/reviews')
-  @Roles('coordinator')
+  @Roles('coordinator', 'super_admin')
   @Permissions('school:create')
   @Audit({ module: 'school', entity: 'iep_review', action: 'schedule' })
   schedule(@Param('id') iepId: string, @Body() dto: CreateIepReviewDto) {
@@ -32,7 +32,7 @@ export class IepReviewController {
   }
 
   @Patch('reviews/:reviewId/complete')
-  @Roles('coordinator')
+  @Roles('coordinator', 'super_admin')
   @Permissions('school:update')
   @Audit({ module: 'school', entity: 'iep_review', action: 'complete' })
   complete(

@@ -35,6 +35,7 @@
     "seed:dev": "ts-node --transpile-only prisma/seed/dev.seed.ts",
     "seed:e2e": "ts-node --transpile-only scripts/e2e-seed.ts",
     "seed:e2e:teardown": "ts-node --transpile-only scripts/e2e-teardown.ts",
+    "user:create": "ts-node --transpile-only scripts/create-user.ts",
     "openapi:export": "ts-node --transpile-only scripts/export-openapi.ts",
     "openapi:check": "ts-node --transpile-only scripts/export-openapi.ts --check",
     "backup:pg": "bash scripts/backup-pg.sh",

@@ -1,0 +1,19 @@
+---
+description: Rebuild the Docker API container after every backend code change
+alwaysApply: true
+---
+
+# Rebuild API container after code changes
+
+After any change that affects the running API (src, prisma, docker, config, package.json), rebuild and recreate the API container. Do not wait for the user to ask.
+
+```bash
+cd docker && docker compose -f docker-compose.dev.yml up -d --build --force-recreate api
+```
+
+Then wait until both health checks return 200:
+
+- `GET http://localhost:8030/api/v1/health/live`
+- `GET http://localhost:8030/api/v1/health/ready`
+
+Skip rebuild only for docs, comments, or frontend-only edits in a sibling repo.

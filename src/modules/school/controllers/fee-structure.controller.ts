@@ -17,11 +17,13 @@ import {
   Audit,
 } from '../../../shared/decorators';
 import { FeeStructureService } from '../services/fee-structure.service';
+import { FeeInvoiceService } from '../services/fee-invoice.service';
 import {
   CreateDiscountDto,
   CreateFeeCategoryDto,
   CreateFeeHeadDto,
   CreateFeeStructureDto,
+  CreateFeeDiscountRequestDto,
   CreateScholarshipDto,
   SetStudentFeeCategoryDto,
   UpdateFeeCategoryDto,
@@ -35,7 +37,10 @@ const ADMIN_ROLES = ['super_admin', 'accountant', 'principal'];
 @ApiBearerAuth()
 @Controller('school')
 export class FeeStructureController {
-  constructor(private readonly feeStructures: FeeStructureService) {}
+  constructor(
+    private readonly feeStructures: FeeStructureService,
+    private readonly invoices: FeeInvoiceService,
+  ) {}
 
   @Get('fee-categories')
   @Permissions('school:read')
@@ -117,6 +122,55 @@ export class FeeStructureController {
     return this.feeStructures.setStudentFeeCategory(studentId, dto);
   }
 
+  @Get('students/:id/fee-category')
+  @Roles(
+    'accountant',
+    'coordinator',
+    'receptionist',
+    'principal',
+    'super_admin',
+  )
+  @Permissions('school:read')
+  getStudentFeeCategory(@Param('id') studentId: string) {
+    return this.feeStructures.getStudentFeeCategory(studentId);
+  }
+
+  @Get('fee-discounts')
+  @Roles('accountant', 'coordinator', 'principal', 'super_admin')
+  @Permissions('school:read')
+  listFeeDiscounts(@Query('status') status?: string) {
+    return this.feeStructures.listFeeDiscounts(status);
+  }
+
+  @Post('fee-discounts')
+  @Roles('accountant', 'coordinator', 'super_admin')
+  @Permissions('school:create')
+  @Audit({ module: 'school', entity: 'student_discount', action: 'create' })
+  async createFeeDiscount(@Body() dto: CreateFeeDiscountRequestDto) {
+    const result = await this.feeStructures.createFeeDiscountRequest(dto);
+    if (result.status === 'approved') {
+      await this.invoices.reapplyDiscountsForStudent(result.studentId);
+    }
+    return result;
+  }
+
+  @Post('fee-discounts/:id/approve')
+  @Roles('principal', 'super_admin')
+  @Permissions('school:update')
+  @Audit({ module: 'school', entity: 'student_discount', action: 'approve' })
+  async approveFeeDiscount(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const result = await this.feeStructures.approveFeeDiscount(
+      id,
+      user.id,
+      user.roles,
+    );
+    await this.invoices.reapplyDiscountsForStudent(result.studentId);
+    return result;
+  }
+
   @Get('students/:id/discounts')
   @Roles('accountant', 'coordinator', 'principal', 'super_admin')
   @Permissions('school:read')
@@ -125,7 +179,7 @@ export class FeeStructureController {
   }
 
   @Post('students/:id/discounts')
-  @Roles('accountant', 'coordinator')
+  @Roles('accountant', 'coordinator', 'super_admin')
   @Permissions('school:create')
   @Audit({ module: 'school', entity: 'student_discount', action: 'create' })
   createDiscount(
@@ -139,8 +193,17 @@ export class FeeStructureController {
   @Roles('principal', 'super_admin')
   @Permissions('school:update')
   @Audit({ module: 'school', entity: 'student_discount', action: 'approve' })
-  approveDiscount(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.feeStructures.approveDiscount(id, user.id, user.roles);
+  async approveDiscount(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const updated = await this.feeStructures.approveDiscount(
+      id,
+      user.id,
+      user.roles,
+    );
+    await this.invoices.reapplyDiscountsForStudent(updated.studentId);
+    return updated;
   }
 
   @Get('students/:id/scholarships')

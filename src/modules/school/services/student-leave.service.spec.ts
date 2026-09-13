@@ -2,7 +2,10 @@ import {
   DomainException,
   ErrorCode,
 } from '../../../shared/errors/domain-exception';
-import { StudentLeaveService } from './student-leave.service';
+import {
+  AttendanceExcusedLeaveListener,
+  StudentLeaveService,
+} from './student-leave.service';
 import { EventNames } from '../../../shared/events/event-names';
 
 describe('StudentLeaveService', () => {
@@ -87,6 +90,117 @@ describe('StudentLeaveService', () => {
     expect(events.emitAsync).toHaveBeenCalledWith(
       EventNames.STUDENT_LEAVE_APPROVED,
       expect.objectContaining({ leaveRequestId: 'l1', studentId: 's1' }),
+    );
+  });
+});
+
+describe('AttendanceExcusedLeaveListener', () => {
+  const day1 = new Date('2026-04-01T00:00:00.000Z');
+  const day2 = new Date('2026-04-02T00:00:00.000Z');
+  const day3 = new Date('2026-04-03T00:00:00.000Z');
+
+  let prisma: {
+    student: { findUnique: jest.Mock };
+    studentAttendance: {
+      findUnique: jest.Mock;
+      upsert: jest.Mock;
+    };
+  };
+  let workingDays: { listWorkingDates: jest.Mock };
+  let listener: AttendanceExcusedLeaveListener;
+
+  beforeEach(() => {
+    prisma = {
+      student: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 's1',
+          shiftId: 'shift1',
+        }),
+      },
+      studentAttendance: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+    };
+    workingDays = {
+      listWorkingDates: jest.fn().mockResolvedValue([day1, day3]),
+    };
+    listener = new AttendanceExcusedLeaveListener(
+      prisma as never,
+      workingDays as never,
+    );
+  });
+
+  it('marks only working days as excused_leave (skips holidays)', async () => {
+    await listener.onApproved({
+      leaveRequestId: 'l1',
+      studentId: 's1',
+      startDate: '2026-04-01',
+      endDate: '2026-04-03',
+      reviewedBy: 'coord1',
+    });
+
+    expect(workingDays.listWorkingDates).toHaveBeenCalled();
+    expect(prisma.studentAttendance.upsert).toHaveBeenCalledTimes(2);
+    expect(prisma.studentAttendance.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          attendanceDate: day1,
+          status: 'excused_leave',
+        }),
+      }),
+    );
+    expect(prisma.studentAttendance.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          attendanceDate: day3,
+          status: 'excused_leave',
+        }),
+      }),
+    );
+    expect(prisma.studentAttendance.upsert).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ attendanceDate: day2 }),
+      }),
+    );
+  });
+
+  it('does not overwrite an existing present mark', async () => {
+    prisma.studentAttendance.findUnique.mockImplementation(
+      ({ where }: { where: { studentId_attendanceDate: { attendanceDate: Date } } }) => {
+        const d = where.studentId_attendanceDate.attendanceDate;
+        if (d === day1) {
+          return Promise.resolve({ status: 'present' });
+        }
+        return Promise.resolve(null);
+      },
+    );
+
+    await listener.onApproved({
+      leaveRequestId: 'l1',
+      studentId: 's1',
+      startDate: '2026-04-01',
+      endDate: '2026-04-03',
+      reviewedBy: 'coord1',
+    });
+
+    expect(prisma.studentAttendance.upsert).toHaveBeenCalledTimes(1);
+    expect(prisma.studentAttendance.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          attendanceDate: day3,
+          status: 'excused_leave',
+        }),
+      }),
+    );
+    expect(prisma.studentAttendance.upsert).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          studentId_attendanceDate: expect.objectContaining({
+            attendanceDate: day1,
+          }),
+        }),
+      }),
     );
   });
 });

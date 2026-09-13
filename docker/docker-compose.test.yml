@@ -65,6 +65,7 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_USE_SSL: "false"
+      R2_BUCKET_NAME: sserp
       JWT_PRIVATE_KEY_PATH: /app/keys/jwt-private.pem
       JWT_PUBLIC_KEY_PATH: /app/keys/jwt-public.pem
       COOKIE_SECURE: "false"

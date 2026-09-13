@@ -6,13 +6,13 @@ import {
   EmploymentType,
   EnrollmentStatus,
   HolidayType,
-  HrDepartment,
   Shift,
   Student,
   StudentStatus,
   Teacher,
 } from '@prisma/client';
 import { faker } from '@faker-js/faker';
+import { resolveOrgIds } from './hr-org.seed';
 
 faker.seed(20260729);
 
@@ -215,7 +215,7 @@ async function ensureHolidays(
 }
 
 interface EmployeeSpec {
-  department: HrDepartment;
+  department: string;
   designation: string;
   employmentType: EmploymentType;
   status: EmployeeStatus;
@@ -349,6 +349,11 @@ async function ensureEmployees(prisma: PrismaClient): Promise<Employee[]> {
   for (const spec of specs) {
     const employeeCode = await nextCode(prisma, 'employee');
     const joiningDate = faker.date.past({ years: 5 });
+    const { departmentId, designationId } = await resolveOrgIds(
+      prisma,
+      spec.department,
+      spec.designation,
+    );
     const employee = await prisma.employee.create({
       data: {
         employeeCode,
@@ -357,8 +362,8 @@ async function ensureEmployees(prisma: PrismaClient): Promise<Employee[]> {
         gender: faker.helpers.arrayElement(['male', 'female']),
         personalEmail: faker.internet.email().toLowerCase(),
         phone: faker.phone.number(),
-        department: spec.department,
-        designation: spec.designation,
+        departmentId,
+        designationId,
         employmentType: spec.employmentType,
         joiningDate,
         basicSalary: spec.basicSalary,
@@ -387,10 +392,20 @@ async function ensureTeachers(
   if (existing.length >= TARGET_TEACHERS) return existing;
 
   const existingEmployeeIds = new Set(existing.map((t) => t.employeeId));
+  const schoolDept = await prisma.department.findUniqueOrThrow({
+    where: { code: 'school' },
+  });
+  const teacherDesig = await prisma.designation.findFirstOrThrow({
+    where: {
+      departmentId: schoolDept.id,
+      name: 'Special Education Teacher',
+      deletedAt: null,
+    },
+  });
   const candidates = employees.filter(
     (e) =>
-      e.department === 'school' &&
-      e.designation === 'Special Education Teacher' &&
+      e.departmentId === schoolDept.id &&
+      e.designationId === teacherDesig.id &&
       !existingEmployeeIds.has(e.id),
   );
   const needed = TARGET_TEACHERS - existing.length;

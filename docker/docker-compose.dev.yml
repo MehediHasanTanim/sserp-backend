@@ -26,7 +26,10 @@ services:
       timeout: 3s
       retries: 10
 
+  # Optional local object storage. Not started by default — app uses Cloudflare R2
+  # from .env. To use MinIO instead: docker compose --profile minio up -d
   minio:
+    profiles: ["minio"]
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
@@ -44,6 +47,7 @@ services:
       retries: 10
 
   minio-init:
+    profiles: ["minio"]
     image: minio/mc:latest
     depends_on:
       minio:
@@ -72,9 +76,7 @@ services:
       DATABASE_URL: postgresql://sserp:sserp@postgres:5432/sserp?schema=public
       DATABASE_APP_URL: postgresql://sserp_app:sserp_app@postgres:5432/sserp?schema=public
       REDIS_URL: redis://redis:6379
-      MINIO_ENDPOINT: minio
-      MINIO_PORT: 9000
-      MINIO_USE_SSL: "false"
+      # Object storage comes from ../.env (Cloudflare R2). Do not override to local MinIO.
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
       JWT_PRIVATE_KEY_PATH: /app/keys/jwt-private.pem
@@ -87,10 +89,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
     entrypoint: ["/bin/sh", "/app/docker/api-entrypoint.sh"]
     healthcheck:
       test:

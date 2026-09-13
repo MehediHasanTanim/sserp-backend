@@ -8,7 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { HrAttendanceStatus, HrDepartment } from '@prisma/client';
+import { HrAttendanceStatus } from '@prisma/client';
 import {
   Roles,
   Permissions,
@@ -33,7 +33,7 @@ export class HrAttendanceController {
     @Query('date') date?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
-    @Query('department') department?: HrDepartment,
+    @Query('department') department?: string,
     @Query('status') status?: HrAttendanceStatus,
     @Query('employeeId') employeeId?: string,
     @Query('page') page?: string,
@@ -59,7 +59,7 @@ export class HrAttendanceController {
     @Query('year') year: string,
     @Query('month') month: string,
     @Query('employeeId') employeeId?: string,
-    @Query('department') department?: HrDepartment,
+    @Query('department') department?: string,
   ) {
     return this.attendance.monthlySummary({
       year: Number(year),
@@ -74,7 +74,7 @@ export class HrAttendanceController {
   @Permissions('hr:read')
   @ApiOperation({ summary: 'Repeated lateness and unexplained absences' })
   anomalies(
-    @Query('department') department?: HrDepartment,
+    @Query('department') department?: string,
     @Query('lookbackDays') lookbackDays?: string,
   ) {
     return this.attendance.anomalies({

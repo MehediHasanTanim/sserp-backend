@@ -2,17 +2,18 @@ import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   EmployeeDocumentType,
+  EmployeeStatus,
   ExitType,
-  HrDepartment,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { DomainException } from '../../../shared/errors/domain-exception';
 import { EventNames } from '../../../shared/events/event-names';
+import { OrgStructureService } from './org-structure.service';
 
 export interface TransferInput {
-  department?: HrDepartment;
-  designation?: string;
+  departmentId?: string;
+  designationId?: string;
   reportingManagerId?: string;
   effectiveDate: string;
   reason: string;
@@ -26,6 +27,12 @@ export interface ExitInput {
   clearanceChecklist?: Record<string, unknown>;
 }
 
+const EXIT_TYPE_TO_STATUS: Record<ExitType, EmployeeStatus> = {
+  resignation: 'resigned',
+  termination: 'terminated',
+  retirement: 'retired',
+};
+
 export interface CreateDocumentInput {
   documentType: EmployeeDocumentType;
   attachmentId: string;
@@ -37,8 +44,8 @@ export interface CreateDocumentInput {
 export interface CreateContractInput {
   contractType: string;
   startDate: string;
-  endDate?: string;
-  attachmentId?: string;
+  endDate?: string | null;
+  attachmentId?: string | null;
   isCurrent?: boolean;
 }
 
@@ -52,6 +59,7 @@ export class EmployeeLifecycleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
+    private readonly org: OrgStructureService,
   ) {}
 
   private async requireEmployee(
@@ -63,6 +71,16 @@ export class EmployeeLifecycleService {
     });
     if (!employee) throw DomainException.notFound('Employee not found');
     return employee;
+  }
+
+  private assertContractualEmployee(employee: {
+    employmentType: string;
+  }) {
+    if (employee.employmentType !== 'contractual') {
+      throw DomainException.unprocessable(
+        'Contracts apply only to contractual employees',
+      );
+    }
   }
 
   async confirmProbation(
@@ -107,17 +125,27 @@ export class EmployeeLifecycleService {
     return this.prisma.$transaction(async (tx) => {
       const employee = await this.requireEmployee(id, tx);
       if (
-        !input.department &&
-        !input.designation &&
+        !input.departmentId &&
+        !input.designationId &&
         !input.reportingManagerId
       ) {
         throw DomainException.validation(
-          'At least one of department, designation, or reportingManagerId must change',
+          'At least one of departmentId, designationId, or reportingManagerId must change',
         );
       }
+      const nextDepartmentId = input.departmentId ?? employee.departmentId;
+      const nextDesignationId = input.designationId ?? employee.designationId;
+      if (input.departmentId || input.designationId) {
+        await this.org.requireDepartment(nextDepartmentId);
+        await this.org.requireDesignation(nextDesignationId, nextDepartmentId);
+      }
       const data: Prisma.EmployeeUpdateInput = { updatedBy: actorId };
-      if (input.department) data.department = input.department;
-      if (input.designation) data.designation = input.designation;
+      if (input.departmentId) {
+        data.department = { connect: { id: input.departmentId } };
+      }
+      if (input.designationId) {
+        data.designation = { connect: { id: input.designationId } };
+      }
       if (input.reportingManagerId !== undefined) {
         data.reportingManager = { connect: { id: input.reportingManagerId } };
       }
@@ -128,13 +156,13 @@ export class EmployeeLifecycleService {
           changeType: 'transfer',
           effectiveDate: new Date(input.effectiveDate),
           fromValue: {
-            department: employee.department,
-            designation: employee.designation,
+            departmentId: employee.departmentId,
+            designationId: employee.designationId,
             reportingManagerId: employee.reportingManagerId,
           },
           toValue: {
-            department: updated.department,
-            designation: updated.designation,
+            departmentId: updated.departmentId,
+            designationId: updated.designationId,
             reportingManagerId: updated.reportingManagerId,
           },
           reason: input.reason,
@@ -168,9 +196,10 @@ export class EmployeeLifecycleService {
           status: 'in_progress',
         },
       });
+      const nextStatus = EXIT_TYPE_TO_STATUS[input.exitType];
       const updated = await tx.employee.update({
         where: { id },
-        data: { status: 'on_notice', updatedBy: actorId },
+        data: { status: nextStatus, updatedBy: actorId },
       });
       await tx.employeeHistory.create({
         data: {
@@ -178,7 +207,7 @@ export class EmployeeLifecycleService {
           changeType: 'status_change',
           effectiveDate: new Date(input.noticeDate),
           fromValue: { status: employee.status },
-          toValue: { status: 'on_notice' },
+          toValue: { status: nextStatus },
           reason: `Exit initiated: ${input.exitType}`,
           recordedBy: actorId,
         },
@@ -269,7 +298,8 @@ export class EmployeeLifecycleService {
   }
 
   async addContract(employeeId: string, input: CreateContractInput) {
-    await this.requireEmployee(employeeId);
+    const employee = await this.requireEmployee(employeeId);
+    this.assertContractualEmployee(employee);
     const isCurrent = input.isCurrent ?? true;
     return this.prisma.$transaction(async (tx) => {
       if (isCurrent) {
@@ -283,8 +313,8 @@ export class EmployeeLifecycleService {
           employeeId,
           contractType: input.contractType,
           startDate: new Date(input.startDate),
-          endDate: input.endDate ? new Date(input.endDate) : undefined,
-          attachmentId: input.attachmentId,
+          endDate: input.endDate ? new Date(input.endDate) : null,
+          attachmentId: input.attachmentId ?? null,
           isCurrent,
         },
       });
@@ -296,6 +326,8 @@ export class EmployeeLifecycleService {
     contractId: string,
     input: Partial<CreateContractInput>,
   ) {
+    const employee = await this.requireEmployee(employeeId);
+    this.assertContractualEmployee(employee);
     const contract = await this.prisma.employeeContract.findFirst({
       where: { id: contractId, employeeId },
     });
@@ -312,8 +344,14 @@ export class EmployeeLifecycleService {
         data: {
           contractType: input.contractType,
           startDate: input.startDate ? new Date(input.startDate) : undefined,
-          endDate: input.endDate ? new Date(input.endDate) : undefined,
-          attachmentId: input.attachmentId,
+          endDate:
+            input.endDate === undefined
+              ? undefined
+              : input.endDate
+                ? new Date(input.endDate)
+                : null,
+          attachmentId:
+            input.attachmentId === undefined ? undefined : input.attachmentId,
           isCurrent: input.isCurrent,
         },
       });
@@ -321,6 +359,8 @@ export class EmployeeLifecycleService {
   }
 
   async removeContract(employeeId: string, contractId: string) {
+    const employee = await this.requireEmployee(employeeId);
+    this.assertContractualEmployee(employee);
     const contract = await this.prisma.employeeContract.findFirst({
       where: { id: contractId, employeeId },
     });

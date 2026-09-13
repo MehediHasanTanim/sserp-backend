@@ -30,6 +30,8 @@ export interface EnrollStudentInput {
   religion?: string;
   disabilityCategory?: string;
   severityLevel?: string;
+  /** Frontend alias; mapped to severityLevel. */
+  disabilityLevel?: string;
   bloodGroup?: string;
   photoAttachmentId?: string;
   previousInstitution?: string;
@@ -49,6 +51,8 @@ export interface UpdateStudentInput {
   religion?: string;
   disabilityCategory?: string;
   severityLevel?: string;
+  /** Frontend alias; mapped to severityLevel. */
+  disabilityLevel?: string;
   bloodGroup?: string;
   photoAttachmentId?: string;
   previousInstitution?: string;
@@ -203,7 +207,7 @@ export class StudentService {
           nationality: input.nationality,
           religion: input.religion,
           disabilityCategory: input.disabilityCategory,
-          severityLevel: input.severityLevel,
+          severityLevel: input.severityLevel ?? input.disabilityLevel,
           bloodGroup: input.bloodGroup,
           photoAttachmentId: input.photoAttachmentId,
           previousInstitution: input.previousInstitution,
@@ -286,9 +290,25 @@ export class StudentService {
 
   async update(id: string, input: UpdateStudentInput, actorId: string) {
     await this.requireStudent(id);
+    const {
+      dateOfBirth,
+      disabilityLevel,
+      severityLevel,
+      ...rest
+    } = input;
+    const resolvedSeverity = severityLevel ?? disabilityLevel;
     return this.prisma.student.update({
       where: { id },
-      data: { ...input, updatedBy: actorId },
+      data: {
+        ...rest,
+        ...(dateOfBirth !== undefined
+          ? { dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null }
+          : {}),
+        ...(resolvedSeverity !== undefined
+          ? { severityLevel: resolvedSeverity }
+          : {}),
+        updatedBy: actorId,
+      },
     });
   }
 
@@ -396,5 +416,14 @@ export class StudentService {
         notes: input.notes,
       },
     });
+  }
+
+  async removeDocument(studentId: string, documentId: string) {
+    const doc = await this.prisma.studentDocument.findFirst({
+      where: { id: documentId, studentId },
+    });
+    if (!doc) throw DomainException.notFound('Document not found');
+    await this.prisma.studentDocument.delete({ where: { id: documentId } });
+    return { ok: true };
   }
 }

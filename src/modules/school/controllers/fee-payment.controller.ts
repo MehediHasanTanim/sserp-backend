@@ -21,7 +21,7 @@ export class FeePaymentController {
   constructor(private readonly payments: FeePaymentService) {}
 
   @Post('fee-invoices/:id/payments')
-  @Roles('accountant', 'receptionist', 'coordinator')
+  @Roles('accountant', 'receptionist', 'coordinator', 'super_admin')
   @Permissions('school:create')
   @Audit({ module: 'school', entity: 'fee_payment', action: 'record' })
   pay(
@@ -33,7 +33,7 @@ export class FeePaymentController {
   }
 
   @Post('fee-payments/:id/reverse')
-  @Roles('accountant', 'principal')
+  @Roles('accountant', 'principal', 'super_admin')
   @Permissions('school:update')
   @Audit({ module: 'school', entity: 'fee_payment', action: 'reverse' })
   reverse(
@@ -45,7 +45,7 @@ export class FeePaymentController {
   }
 
   @Post('fee-invoices/:id/waive')
-  @Roles('principal')
+  @Roles('principal', 'super_admin')
   @Permissions('school:update')
   @Audit({ module: 'school', entity: 'fee_invoice', action: 'waive' })
   waive(

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -8,16 +9,22 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { PermissionAction, PermissionModule } from '@prisma/client';
+import { ApiBearerAuth, ApiOperation, ApiProperty, ApiTags } from '@nestjs/swagger';
+import { NumberingResetPeriod, PermissionAction, PermissionModule } from '@prisma/client';
 import {
   IsArray,
   IsBoolean,
   IsEmail,
+  IsEnum,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
+  Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import {
   Roles,
   Permissions,
@@ -49,9 +56,61 @@ class UpdateUserDto {
   @IsOptional() guardianId?: string | null;
 }
 
+class PermissionItemDto {
+  @IsEnum(PermissionModule) module!: PermissionModule;
+  @IsEnum(PermissionAction) action!: PermissionAction;
+}
+
 class ReplacePermissionsDto {
   @IsArray()
-  permissions!: Array<{ module: PermissionModule; action: PermissionAction }>;
+  @ValidateNested({ each: true })
+  @Type(() => PermissionItemDto)
+  permissions!: PermissionItemDto[];
+}
+
+class UpdateRoleDto {
+  @IsOptional() @IsString() @MinLength(2) name?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PermissionItemDto)
+  permissions?: PermissionItemDto[];
+}
+
+class CreateRoleDto {
+  @IsString() @MinLength(2) name!: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PermissionItemDto)
+  permissions?: PermissionItemDto[];
+}
+
+class UpdateNumberingSchemeDto {
+  @ApiProperty({ required: false, example: 'APPL-' })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  prefix?: string;
+
+  @ApiProperty({ required: false, example: 5, minimum: 1, maximum: 12 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  padding?: number;
+
+  @ApiProperty({
+    required: false,
+    enum: NumberingResetPeriod,
+    example: NumberingResetPeriod.yearly,
+    description: 'Allowed values: never | yearly | monthly',
+  })
+  @IsOptional()
+  @IsEnum(NumberingResetPeriod)
+  resetPeriod?: NumberingResetPeriod;
 }
 
 class AdminResetPasswordDto {
@@ -151,6 +210,42 @@ export class AdminController {
     return this.roles.list();
   }
 
+  @Post('roles')
+  @Roles('super_admin')
+  @Permissions('admin:create')
+  @Audit({ module: 'admin', entity: 'role', action: 'create' })
+  @ApiOperation({ summary: 'Create a custom role with optional permissions' })
+  createRole(@Body() dto: CreateRoleDto) {
+    return this.roles.create(dto);
+  }
+
+  @Get('roles/:id')
+  @Roles('super_admin')
+  @Permissions('admin:read')
+  getRole(@Param('id') id: string) {
+    return this.roles.get(id);
+  }
+
+  @Patch('roles/:id')
+  @Roles('super_admin')
+  @Permissions('admin:update')
+  @Audit({ module: 'admin', entity: 'role', action: 'update' })
+  @ApiOperation({ summary: 'Update role name, description, and/or permissions' })
+  updateRole(@Param('id') id: string, @Body() dto: UpdateRoleDto) {
+    return this.roles.update(id, dto);
+  }
+
+  @Delete('roles/:id')
+  @Roles('super_admin')
+  @Permissions('admin:delete')
+  @Audit({ module: 'admin', entity: 'role', action: 'delete' })
+  @ApiOperation({
+    summary: 'Delete a role (fails if any users are still assigned)',
+  })
+  deleteRole(@Param('id') id: string) {
+    return this.roles.remove(id);
+  }
+
   @Get('roles/:id/permissions')
   @Roles('super_admin')
   @Permissions('admin:read')
@@ -211,9 +306,14 @@ export class AdminController {
   @Roles('super_admin')
   @Permissions('admin:update')
   @Audit({ module: 'admin', entity: 'numbering_scheme', action: 'update' })
+  @ApiOperation({
+    summary: 'Update a numbering scheme',
+    description:
+      'resetPeriod must be one of: never, yearly, monthly (not "year").',
+  })
   updateScheme(
     @Param('entityType') entityType: string,
-    @Body() body: { prefix?: string; padding?: number; resetPeriod?: never },
+    @Body() body: UpdateNumberingSchemeDto,
   ) {
     return this.numbering.update(entityType, body);
   }

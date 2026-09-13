@@ -5,11 +5,17 @@ import { DomainException } from '../../../shared/errors/domain-exception';
 import { EventNames } from '../../../shared/events/event-names';
 import { HrCalendarService } from './hr-calendar.service';
 import { LeaveBalanceService } from './leave-balance.service';
+import { formatLeaveRequest } from './leave-request.service';
 
 const INCLUDE = {
   leaveType: true,
   employee: {
-    select: { id: true, employeeCode: true, fullName: true, department: true },
+    select: {
+      id: true,
+      employeeCode: true,
+      fullName: true,
+      department: { select: { id: true, code: true, name: true } },
+    },
   },
   approvalSteps: { orderBy: { level: 'asc' as const } },
 };
@@ -49,24 +55,47 @@ export class LeaveApprovalService {
       );
       if (!step)
         throw DomainException.conflict('No pending approval step found');
-      if (!actorRoles.includes(step.approverRole)) {
+
+      const isSuperAdmin = actorRoles.includes('super_admin');
+      if (!isSuperAdmin && !actorRoles.includes(step.approverRole)) {
         throw DomainException.forbidden(
           `Only ${step.approverRole} may approve at level ${step.level}`,
         );
       }
 
-      await tx.leaveApprovalStep.update({
-        where: { id: step.id },
-        data: {
-          decision: 'approved',
-          decidedAt: new Date(),
-          approverUserId,
-          comment,
-        },
-      });
+      if (isSuperAdmin) {
+        // Super admin approval approves the current and all remaining steps
+        const remainingSteps = request.approvalSteps.filter(
+          (s) => s.level >= request.currentApprovalLevel,
+        );
+        for (const s of remainingSteps) {
+          await tx.leaveApprovalStep.update({
+            where: { id: s.id },
+            data: {
+              decision: 'approved',
+              decidedAt: new Date(),
+              approverUserId,
+              comment:
+                s.level === request.currentApprovalLevel
+                  ? comment
+                  : (comment ?? 'Approved by super_admin'),
+            },
+          });
+        }
+      } else {
+        await tx.leaveApprovalStep.update({
+          where: { id: step.id },
+          data: {
+            decision: 'approved',
+            decidedAt: new Date(),
+            approverUserId,
+            comment,
+          },
+        });
+      }
 
       const maxLevel = Math.max(...request.approvalSteps.map((s) => s.level));
-      const isFinal = request.currentApprovalLevel >= maxLevel;
+      const isFinal = isSuperAdmin || request.currentApprovalLevel >= maxLevel;
 
       if (!isFinal) {
         return {
@@ -96,13 +125,14 @@ export class LeaveApprovalService {
       // L-07: write hr_attendance leave rows for every working day in range.
       const employee = await tx.employee.findUnique({
         where: { id: request.employeeId },
+        include: { department: { select: { code: true } } },
       });
       const workingDates = request.isHalfDay
         ? [request.startDate]
         : await this.calendar.listWorkingDates(
             request.startDate,
             request.endDate,
-            employee?.department,
+            employee?.department.code,
             tx,
           );
       for (const date of workingDates) {
@@ -129,6 +159,9 @@ export class LeaveApprovalService {
           status: 'approved',
           approvedBy: approverUserId,
           approvedAt: new Date(),
+          currentApprovalLevel: isSuperAdmin
+            ? maxLevel
+            : request.currentApprovalLevel,
         },
         include: INCLUDE,
       });
@@ -147,7 +180,7 @@ export class LeaveApprovalService {
       });
     }
 
-    return result.request;
+    return formatLeaveRequest(result.request);
   }
 
   async reject(
@@ -173,7 +206,9 @@ export class LeaveApprovalService {
       );
       if (!step)
         throw DomainException.conflict('No pending approval step found');
-      if (!actorRoles.includes(step.approverRole)) {
+
+      const isSuperAdmin = actorRoles.includes('super_admin');
+      if (!isSuperAdmin && !actorRoles.includes(step.approverRole)) {
         throw DomainException.forbidden(
           `Only ${step.approverRole} may reject at level ${step.level}`,
         );
@@ -211,6 +246,6 @@ export class LeaveApprovalService {
       reason,
     });
 
-    return request;
+    return formatLeaveRequest(request);
   }
 }

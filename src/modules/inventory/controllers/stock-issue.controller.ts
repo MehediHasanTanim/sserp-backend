@@ -42,10 +42,11 @@ export class StockIssueController {
   ) {
     const employee = await this.prisma.employee.findFirst({
       where: { user: { id: user.id }, deletedAt: null },
+      include: { department: { select: { code: true } } },
     });
     return this.issues.create({
       requestedBy: user.id,
-      department: employee?.department ?? 'admin',
+      department: employee?.department.code ?? 'admin',
       toLocationId: dto.toLocationId,
       purpose: dto.purpose,
       lines: dto.lines,

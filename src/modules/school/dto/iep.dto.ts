@@ -17,11 +17,13 @@ export class CreateIepPlanDto {
   @IsOptional() @IsUUID() createdByTeacherId?: string;
   @IsOptional() @IsInt() @Min(1) reviewFrequencyMonths?: number;
   @IsOptional() @IsDateString() startDate?: string;
+  @IsOptional() @IsDateString() endDate?: string;
 }
 
 export class UpdateIepPlanDto {
   @IsOptional() @IsInt() @Min(1) reviewFrequencyMonths?: number;
   @IsOptional() @IsDateString() startDate?: string;
+  @IsOptional() @IsDateString() endDate?: string;
   @IsOptional() @IsUUID() createdByTeacherId?: string;
 }
 

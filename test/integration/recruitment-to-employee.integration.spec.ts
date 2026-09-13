@@ -83,7 +83,12 @@ describe('Recruitment to employee integration (RC-04)', () => {
 
     const employee = await recruitment.convert(applicant.id, ACTOR_ID);
     expect(employee.id).toBeTruthy();
-    expect(employee.designation).toBe('Special Educator');
+    const loaded = await prisma.employee.findUniqueOrThrow({
+      where: { id: employee.id },
+      include: { designation: true, department: true },
+    });
+    expect(loaded.designation.name).toBe('Special Educator');
+    expect(loaded.department.code).toBe('school');
 
     const updatedReq = await prisma.jobRequisition.findUniqueOrThrow({
       where: { id: req.id },

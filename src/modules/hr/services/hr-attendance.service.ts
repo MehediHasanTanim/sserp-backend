@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { HrAttendanceStatus, HrDepartment, Prisma } from '@prisma/client';
-import { formatInTimeZone } from 'date-fns-tz';
+import { HrAttendanceStatus, Prisma } from '@prisma/client';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { DomainException } from '../../../shared/errors/domain-exception';
 import { TxClient } from '../../../shared/prisma/transaction.helper';
@@ -14,6 +14,7 @@ export interface BulkAttendanceItemInput {
   status: HrAttendanceStatus;
   checkIn?: string;
   checkOut?: string;
+  overtimeMinutes?: number;
   remarks?: string;
 }
 
@@ -21,7 +22,7 @@ export interface AttendanceListQuery {
   date?: string;
   dateFrom?: string;
   dateTo?: string;
-  department?: HrDepartment;
+  department?: string;
   status?: HrAttendanceStatus;
   employeeId?: string;
   page?: number;
@@ -40,7 +41,7 @@ export interface MonthlySummaryQuery {
   year: number;
   month: number;
   employeeId?: string;
-  department?: HrDepartment;
+  department?: string;
 }
 
 @Injectable()
@@ -64,7 +65,8 @@ export class HrAttendanceService {
     }
     if (query.status) where.status = query.status;
     if (query.employeeId) where.employeeId = query.employeeId;
-    if (query.department) where.employee = { department: query.department };
+    if (query.department)
+      where.employee = { department: { code: query.department } };
 
     const [total, items] = await this.prisma.$transaction([
       this.prisma.hrAttendance.count({ where }),
@@ -185,6 +187,34 @@ export class HrAttendanceService {
     };
   }
 
+  private parseTimeOrDateTime(
+    dateOnlyStr: string,
+    timeOrIso: string | undefined,
+  ): Date | undefined {
+    if (!timeOrIso) return undefined;
+    const trimmed = timeOrIso.trim();
+    if (!trimmed) return undefined;
+
+    const tz = this.orgClock.getTimezone();
+
+    // Check if it's a time-only string like HH:mm or HH:mm:ss
+    const timeMatch = trimmed.match(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/);
+    if (timeMatch) {
+      const timePart =
+        timeMatch[0].length === 5 ? `${timeMatch[0]}:00` : timeMatch[0];
+      const datePart = dateOnlyStr.slice(0, 10);
+      return fromZonedTime(`${datePart}T${timePart}`, tz);
+    }
+
+    // Check if it's an ISO-like string without timezone offset (e.g. YYYY-MM-DDTHH:mm:ss)
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(trimmed)) {
+      return fromZonedTime(trimmed, tz);
+    }
+
+    const parsed = new Date(trimmed);
+    return isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+
   async bulkSubmit(items: BulkAttendanceItemInput[], markedBy: string) {
     const absences: Array<{ id: string; employeeId: string; date: string }> =
       [];
@@ -198,8 +228,14 @@ export class HrAttendanceService {
       const penaltySettings = await this.resolvePenaltySettings(tx);
       for (const item of items) {
         const attendanceDate = new Date(item.attendanceDate);
-        const checkIn = item.checkIn ? new Date(item.checkIn) : undefined;
-        const checkOut = item.checkOut ? new Date(item.checkOut) : undefined;
+        const checkIn = this.parseTimeOrDateTime(
+          item.attendanceDate,
+          item.checkIn,
+        );
+        const checkOut = this.parseTimeOrDateTime(
+          item.attendanceDate,
+          item.checkOut,
+        );
 
         const previous = await tx.hrAttendance.findUnique({
           where: {
@@ -246,6 +282,7 @@ export class HrAttendanceService {
             lateMinutes,
             earlyLeaveMinutes,
             penaltyAmount,
+            overtimeMinutes: item.overtimeMinutes ?? 0,
             remarks: item.remarks,
             markedBy,
           },
@@ -256,6 +293,9 @@ export class HrAttendanceService {
             lateMinutes,
             earlyLeaveMinutes,
             penaltyAmount,
+            ...(item.overtimeMinutes !== undefined
+              ? { overtimeMinutes: item.overtimeMinutes }
+              : {}),
             remarks: item.remarks,
             markedBy,
           },
@@ -303,11 +343,12 @@ export class HrAttendanceService {
     if (!existing)
       throw DomainException.notFound('Attendance record not found');
 
+    const dateStr = existing.attendanceDate.toISOString().slice(0, 10);
     const checkIn = input.checkIn
-      ? new Date(input.checkIn)
+      ? this.parseTimeOrDateTime(dateStr, input.checkIn)
       : (existing.checkIn ?? undefined);
     const checkOut = input.checkOut
-      ? new Date(input.checkOut)
+      ? this.parseTimeOrDateTime(dateStr, input.checkOut)
       : (existing.checkOut ?? undefined);
     const lateMinutes = await this.computeLateMinutes(
       this.prisma,
@@ -333,8 +374,8 @@ export class HrAttendanceService {
       where: { id },
       data: {
         status,
-        checkIn: input.checkIn ? new Date(input.checkIn) : undefined,
-        checkOut: input.checkOut ? new Date(input.checkOut) : undefined,
+        checkIn,
+        checkOut,
         overtimeMinutes: input.overtimeMinutes,
         remarks: input.remarks,
         lateMinutes,
@@ -370,7 +411,8 @@ export class HrAttendanceService {
       attendanceDate: { gte: start, lte: end },
     };
     if (query.employeeId) where.employeeId = query.employeeId;
-    if (query.department) where.employee = { department: query.department };
+    if (query.department)
+      where.employee = { department: { code: query.department } };
 
     const records = await this.prisma.hrAttendance.findMany({
       where,
@@ -450,7 +492,7 @@ export class HrAttendanceService {
     };
   }
 
-  async anomalies(query: { department?: HrDepartment; lookbackDays?: number }) {
+  async anomalies(query: { department?: string; lookbackDays?: number }) {
     const lookbackDays = query.lookbackDays ?? 30;
     const end = new Date();
     const start = new Date(end.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
@@ -459,7 +501,8 @@ export class HrAttendanceService {
       attendanceDate: { gte: start, lte: end },
       status: { in: ['late', 'absent'] },
     };
-    if (query.department) where.employee = { department: query.department };
+    if (query.department)
+      where.employee = { department: { code: query.department } };
 
     const records = await this.prisma.hrAttendance.findMany({
       where,

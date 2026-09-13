@@ -8,6 +8,18 @@ import {
 import { EventNames } from '../../../shared/events/event-names';
 import { WorkingDaysService } from './working-days.service';
 
+function formatStudentLeave(row: any) {
+  if (!row) return row;
+  const days = row.totalDays != null ? Number(row.totalDays) : undefined;
+  return {
+    ...row,
+    studentName: row.student?.fullName ?? row.studentName,
+    studentCode: row.student?.studentCode ?? row.studentCode,
+    dayCount: row.dayCount ?? days,
+    days: row.days ?? days,
+  };
+}
+
 @Injectable()
 export class StudentLeaveService {
   constructor(
@@ -16,8 +28,8 @@ export class StudentLeaveService {
     private readonly workingDays: WorkingDaysService,
   ) {}
 
-  list(filters?: { status?: string; studentId?: string }) {
-    return this.prisma.studentLeaveRequest.findMany({
+  async list(filters?: { status?: string; studentId?: string }) {
+    const rows = await this.prisma.studentLeaveRequest.findMany({
       where: {
         ...(filters?.status
           ? { status: filters.status as 'pending' | 'approved' | 'rejected' }
@@ -29,6 +41,7 @@ export class StudentLeaveService {
         student: { select: { id: true, fullName: true, studentCode: true } },
       },
     });
+    return rows.map(formatStudentLeave);
   }
 
   async get(id: string) {
@@ -37,7 +50,7 @@ export class StudentLeaveService {
       include: { student: true },
     });
     if (!row) throw DomainException.notFound('Leave request not found');
-    return row;
+    return formatStudentLeave(row);
   }
 
   async submit(params: {
@@ -90,12 +103,15 @@ export class StudentLeaveService {
         totalDays: days,
         reason: params.reason,
       },
+      include: {
+        student: { select: { id: true, fullName: true, studentCode: true } },
+      },
     });
     await this.events.emitAsync(EventNames.STUDENT_LEAVE_SUBMITTED, {
       leaveRequestId: created.id,
       studentId: params.studentId,
     });
-    return created;
+    return formatStudentLeave(created);
   }
 
   async approve(id: string, reviewedBy: string) {
@@ -110,6 +126,9 @@ export class StudentLeaveService {
         reviewedBy,
         reviewedAt: new Date(),
       },
+      include: {
+        student: { select: { id: true, fullName: true, studentCode: true } },
+      },
     });
     await this.events.emitAsync(EventNames.STUDENT_LEAVE_APPROVED, {
       leaveRequestId: id,
@@ -118,7 +137,7 @@ export class StudentLeaveService {
       endDate: req.endDate.toISOString().slice(0, 10),
       reviewedBy,
     });
-    return updated;
+    return formatStudentLeave(updated);
   }
 
   async reject(id: string, reviewedBy: string, reviewNote: string) {
@@ -137,13 +156,16 @@ export class StudentLeaveService {
         reviewedAt: new Date(),
         reviewNote,
       },
+      include: {
+        student: { select: { id: true, fullName: true, studentCode: true } },
+      },
     });
     await this.events.emitAsync(EventNames.STUDENT_LEAVE_REJECTED, {
       leaveRequestId: id,
       studentId: req.studentId,
       reason: reviewNote,
     });
-    return updated;
+    return formatStudentLeave(updated);
   }
 }
 

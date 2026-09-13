@@ -11,6 +11,7 @@ import { PrismaService } from '../../src/shared/prisma/prisma.service';
 import { StudentService } from '../../src/modules/school/services/student.service';
 import { AdmissionFeeService } from '../../src/modules/school/services/admission-fee.service';
 import { TeacherMappingService } from '../../src/modules/school/services/teacher-mapping.service';
+import { employeeOrgIds } from './helpers/org.helper';
 
 /**
  * S-02/M-05: a student cannot be mapped to a teacher while their admission
@@ -55,12 +56,13 @@ describe('Admission fee gate integration', () => {
     });
     shiftId = morning.id;
 
+    const { departmentId, designationId } = await employeeOrgIds(prisma);
     const employee = await prisma.employee.create({
       data: {
         employeeCode: `EMP-TEST-${randomUUID()}`,
         fullName: 'Admission Gate Test Teacher',
-        department: 'school',
-        designation: 'Special Education Teacher',
+        departmentId,
+        designationId,
         employmentType: 'permanent',
         joiningDate: new Date('2020-01-01'),
         basicSalary: 30000,
